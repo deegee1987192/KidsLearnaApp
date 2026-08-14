@@ -1,0 +1,18 @@
+# Dependencies (not needed for this static site, but future-proof)
+node_modules/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# Local logs / temp
+*.log
+.env
+.env.local
+
+# Vercel local
+.vercel/

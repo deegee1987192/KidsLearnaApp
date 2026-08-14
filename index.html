@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KidsLearn — Wiz's Adventure Hub 🦉</title>
+<link rel="stylesheet" href="css/base.css">
+<style>
+.hub-title{
+  font-family:'Fredoka One',cursive;
+  font-size:clamp(2rem,6vw,3rem);
+  color:white;text-align:center;
+  text-shadow:3px 3px 0 rgba(0,0,0,0.2),0 0 20px rgba(255,255,255,0.3);
+  letter-spacing:2px;
+  margin:8px 0 4px;
+}
+.hub-sub{
+  text-align:center;color:white;font-weight:800;
+  font-size:1.05rem;text-shadow:1px 1px 0 rgba(0,0,0,0.2);
+  margin-bottom:14px;
+}
+.tiles{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  width:100%;max-width:560px;margin-top:6px;
+}
+@media (max-width:420px){ .tiles{grid-template-columns:1fr} }
+.tile{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(255,253,231,0.97);
+  border-radius:22px;padding:20px 14px;
+  text-decoration:none;
+  box-shadow:0 6px 0 rgba(0,0,0,0.15),0 10px 30px rgba(0,0,0,0.1);
+  transition:transform 0.15s,box-shadow 0.15s;
+  color:var(--navy);
+  min-height:160px;
+  position:relative;
+  overflow:hidden;
+}
+.tile:hover{transform:translateY(-3px);box-shadow:0 9px 0 rgba(0,0,0,0.15),0 14px 40px rgba(0,0,0,0.12)}
+.tile:active{transform:translateY(2px);box-shadow:0 4px 0 rgba(0,0,0,0.15)}
+.tile.locked{opacity:0.55;cursor:not-allowed;pointer-events:none}
+.tile-icon{font-size:3.4rem;line-height:1;margin-bottom:8px}
+.tile-name{font-family:'Fredoka One',cursive;font-size:1.25rem;text-align:center;line-height:1.15}
+.tile-desc{font-size:0.85rem;color:#5C6BC0;font-weight:700;text-align:center;margin-top:4px}
+.tile-badge{
+  position:absolute;top:8px;right:8px;
+  background:#FFB300;color:white;font-family:'Fredoka One',cursive;
+  font-size:0.7rem;padding:3px 10px;border-radius:99px;letter-spacing:1px;
+}
+.tile-badge.soon{background:#BDBDBD}
+.tile-badge.new{background:#66BB6A}
+</style>
+</head>
+<body>
+
+<div id="scene" class="day">
+  <div class="sun"></div>
+  <div class="moon"></div>
+  <div class="stars-wrap" id="starsWrap"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="hills">
+    <div class="hill hill1"></div>
+    <div class="hill hill2"></div>
+    <div class="hill hill3"></div>
+  </div>
+  <div class="tree" style="left:5%;bottom:55px"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+  <div class="tree" style="right:8%;bottom:60px"><div class="tree-top" style="width:50px;height:60px"></div><div class="tree-trunk"></div></div>
+</div>
+
+<div id="confetti"></div>
+
+<div id="app">
+  <div class="hub-title">🦉 Wiz's Adventure Hub</div>
+  <div class="hub-sub">Pick a game to play!</div>
+
+  <div id="wizHost"></div>
+
+  <div class="tiles">
+    <a class="tile" href="games/word-quest.html">
+      <span class="tile-badge">GAME 1</span>
+      <div class="tile-icon">✏️</div>
+      <div class="tile-name">Word Quest</div>
+      <div class="tile-desc">Fill blanks, crack codes, count &amp; think</div>
+    </a>
+    <a class="tile" href="games/switch-track.html">
+      <span class="tile-badge new">NEW</span>
+      <div class="tile-icon">🚂</div>
+      <div class="tile-name">Switch Track</div>
+      <div class="tile-desc">Route the train to the right station</div>
+    </a>
+    <div class="tile locked">
+      <span class="tile-badge soon">SOON</span>
+      <div class="tile-icon">🎵</div>
+      <div class="tile-name">Copy the Tune</div>
+      <div class="tile-desc">Repeat the melody Simon-Says style</div>
+    </div>
+    <div class="tile locked">
+      <span class="tile-badge soon">SOON</span>
+      <div class="tile-icon">⚖️</div>
+      <div class="tile-name">Balance the Scale</div>
+      <div class="tile-desc">Drag weights to balance the scale</div>
+    </div>
+  </div>
+</div>
+
+<script src="js/core/util.js"></script>
+<script src="js/core/scene.js"></script>
+<script src="js/core/wiz.js"></script>
+<script src="js/core/confetti.js"></script>
+<script>
+  KL.scene.setScene('day');
+  KL.wiz.mount(document.getElementById('wizHost'), 'Which game today, friend? 🦉');
+  setTimeout(()=>KL.wiz.say('Which game today, friend? 🦉','idle'), 400);
+</script>
+</body>
+</html>
