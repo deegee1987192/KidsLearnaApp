@@ -1,0 +1,124 @@
+/* ═══ COPY THE TUNE ═══ */
+
+.ct-card{
+  padding:20px 16px 22px;
+}
+
+.ct-header{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;flex-wrap:wrap;margin-bottom:6px;
+}
+.ct-level-label{
+  font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--navy);
+}
+.ct-level-name{
+  font-family:'Fredoka One',cursive;font-size:1.25rem;color:var(--coral);
+}
+.ct-round{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'Fredoka One',cursive;font-size:1rem;color:var(--navy);
+  background:#FFF3E0;padding:4px 14px;border-radius:99px;
+}
+
+.ct-hint{
+  text-align:center;color:#5C6BC0;font-weight:800;
+  font-size:0.95rem;line-height:1.35;
+  margin:4px 0 8px;min-height:1.4em;
+}
+
+.ct-hearts{
+  display:flex;justify-content:center;gap:8px;
+  font-size:1.4rem;margin:4px 0 6px;min-height:32px;
+}
+.ct-heart{transition:transform 0.25s,opacity 0.25s,filter 0.25s}
+.ct-heart.lost{filter:grayscale(1);opacity:0.3;transform:scale(0.65)}
+
+.ct-phase{
+  text-align:center;font-family:'Fredoka One',cursive;
+  font-size:1.15rem;color:var(--navy);
+  min-height:1.5rem;margin:2px 0 10px;letter-spacing:1px;
+}
+.ct-phase.listening{color:#7C4DFF}
+.ct-phase.your-turn{color:#FF6B4A}
+.ct-phase.oops{color:#C62828}
+.ct-phase.ok{color:#388E3C}
+
+/* Pads grid */
+.ct-pads{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  width:100%;max-width:340px;
+  margin:6px auto 12px;
+  aspect-ratio:1 / 1;
+}
+
+.ct-pad{
+  --pad-on:#66BB6A;
+  --pad-off:#2E7D32;
+  border:none;border-radius:22px;
+  background:var(--pad-off);
+  box-shadow:
+    inset 0 -8px 0 rgba(0,0,0,0.18),
+    inset 0 4px 0 rgba(255,255,255,0.12),
+    0 4px 12px rgba(0,0,0,0.15);
+  cursor:pointer;
+  transition:background 0.08s,transform 0.1s,box-shadow 0.1s;
+  min-height:120px;
+  position:relative;overflow:hidden;
+}
+.ct-pad::after{
+  content:'';position:absolute;inset:0;border-radius:22px;
+  background:radial-gradient(circle at 50% 35%,rgba(255,255,255,0.18),transparent 60%);
+  pointer-events:none;
+}
+.ct-pad:hover:not(:disabled){transform:translateY(-2px)}
+.ct-pad:active:not(:disabled){
+  transform:translateY(2px);
+  box-shadow:
+    inset 0 -4px 0 rgba(0,0,0,0.18),
+    0 2px 6px rgba(0,0,0,0.15);
+}
+.ct-pad:disabled{cursor:default}
+.ct-pad.lit{
+  background:var(--pad-on);
+  box-shadow:
+    inset 0 -8px 0 rgba(0,0,0,0.08),
+    inset 0 4px 0 rgba(255,255,255,0.4),
+    0 0 28px var(--pad-on),
+    0 4px 14px rgba(0,0,0,0.2);
+  transform:scale(1.04);
+}
+.ct-pad.wrong{animation:padWrong 0.5s ease}
+@keyframes padWrong{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-8px) rotate(-3deg)}
+  50%{transform:translateX(8px) rotate(3deg)}
+  80%{transform:translateX(-4px) rotate(-1deg)}
+}
+
+.ct-outcome{
+  text-align:center;font-family:'Fredoka One',cursive;
+  font-size:1.2rem;min-height:1.6rem;margin-top:8px;
+}
+.ct-outcome.ok{color:#388E3C}
+.ct-outcome.no{color:#C62828}
+
+.ct-controls{
+  display:flex;gap:10px;justify-content:center;
+  flex-wrap:wrap;margin-top:10px;
+}
+.ct-btn{
+  font-family:'Fredoka One',cursive;
+  font-size:1.05rem;
+  padding:10px 26px;border:none;border-radius:99px;
+  cursor:pointer;
+  box-shadow:0 5px 0 rgba(0,0,0,0.18);
+  transition:transform 0.1s,box-shadow 0.1s;
+  letter-spacing:1px;color:white;
+}
+.ct-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 7px 0 rgba(0,0,0,0.18)}
+.ct-btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,0.18)}
+.ct-btn:disabled{opacity:0.55;cursor:not-allowed}
+.ct-btn.listen{background:#7C4DFF;box-shadow:0 5px 0 #5E35B1}
+.ct-btn.next{background:var(--coral);box-shadow:0 5px 0 var(--coral2)}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copy the Tune — Wiz's Adventure 🎵</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/copy-the-tune.css">
+</head>
+<body>
+
+<div id="scene" class="day">
+  <div class="sun"></div>
+  <div class="moon"></div>
+  <div class="stars-wrap" id="starsWrap"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="hills">
+    <div class="hill hill1"></div>
+    <div class="hill hill2"></div>
+    <div class="hill hill3"></div>
+  </div>
+  <div class="tree" style="left:5%;bottom:55px"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+  <div class="tree" style="right:8%;bottom:60px"><div class="tree-top" style="width:50px;height:60px"></div><div class="tree-trunk"></div></div>
+</div>
+
+<div id="confetti"></div>
+
+<a href="../index.html" class="back-hub">← Home</a>
+
+<div id="app">
+  <div class="hdr"><div class="logo">🎵 Copy the Tune</div></div>
+
+  <div id="wizHost"></div>
+
+  <div id="ctGameScreen" style="width:100%">
+    <div class="level-dots" id="ctLevelDots"></div>
+
+    <div class="card ct-card">
+      <div class="ct-header">
+        <div>
+          <div class="ct-level-label" id="ctLevelLabel">Level 1 / 10</div>
+          <div class="ct-level-name"  id="ctLevelName">—</div>
+        </div>
+        <div class="ct-round hidden" id="ctRoundLabel">Round 1</div>
+      </div>
+
+      <div class="ct-hint" id="ctHint"></div>
+      <div class="ct-hearts" id="ctHearts"></div>
+      <div class="ct-phase" id="ctPhase"></div>
+
+      <div class="ct-pads" id="ctPads"></div>
+
+      <div class="ct-outcome" id="ctOutcome"></div>
+
+      <div class="ct-controls">
+        <button class="ct-btn listen" id="ctListen">▶ LISTEN</button>
+        <button class="ct-btn next hidden" id="ctNext">NEXT ➜</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ctEndScreen" class="screen hidden">
+    <div class="big-e">🏆</div>
+    <h1>Copy the Tune Master!</h1>
+    <p>You copied the tune on <span id="ctEndScore">0 / 10</span> levels!<br>
+       Wiz is so proud of your musical ears! 🦉❤️</p>
+    <button class="play-btn" id="ctPlayAgain">Play Again 🎵</button>
+  </div>
+</div>
+
+<script src="../js/core/util.js"></script>
+<script src="../js/core/scene.js"></script>
+<script src="../js/core/wiz.js"></script>
+<script src="../js/core/confetti.js"></script>
+<script src="../js/copy-the-tune/levels.js"></script>
+<script src="../js/copy-the-tune/game.js"></script>
+<script>
+  KL.wiz.mount(document.getElementById('wizHost'), 'Ready to copy some tunes?');
+  KL.copyTheTune.boot();
+</script>
+</body>
+</html>
