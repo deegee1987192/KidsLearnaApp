@@ -14,14 +14,18 @@
 .st-level-name{
   font-family:'Fredoka One',cursive;font-size:1.25rem;color:var(--coral);
 }
-.st-target{
+
+.st-trains-chip{
   display:inline-flex;align-items:center;gap:6px;
+  background:#FFF3E0;padding:6px 12px;border-radius:99px;
   font-family:'Fredoka One',cursive;font-size:0.95rem;color:var(--navy);
-  background:#FFF3E0;padding:4px 12px;border-radius:99px;
 }
-.st-target-swatch{
-  width:16px;height:16px;border-radius:50%;
-  box-shadow:inset 0 -2px 0 rgba(0,0,0,0.15);
+.st-trains-chip::before{
+  content:'🚂';font-size:1.1rem;
+}
+.st-train-dot{
+  width:14px;height:14px;border-radius:50%;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,0.2);
 }
 
 .st-hint{
@@ -34,8 +38,7 @@
   position:relative;
   display:flex;justify-content:center;align-items:center;
   margin:6px auto 10px;
-  overflow-x:auto;
-  overflow-y:hidden;
+  overflow-x:auto;overflow-y:hidden;
   padding:8px 0;
 }
 .board{
@@ -45,27 +48,24 @@
   background:#8BC34A;
 }
 
-/* Train — DOM overlay animated via offset-path */
+/* Train — DOM overlay animated via left/top per tick */
 .train{
   position:absolute;
   top:0;left:0;
-  width:38px;height:38px;
+  width:36px;height:36px;
   display:flex;align-items:center;justify-content:center;
-  font-size:28px;
+  font-size:24px;
   pointer-events:none;
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35));
-  offset-distance:0%;
-  offset-rotate:0deg;
   transform:translate(-50%,-50%);
-  will-change:offset-distance;
   z-index:5;
-}
-@keyframes stTrainRun{
-  from { offset-distance: 0%; }
-  to   { offset-distance: 100%; }
+  border-radius:50%;
+  background:var(--train-tint,#888);
+  box-shadow:0 0 0 3px rgba(255,255,255,0.85),
+             0 2px 6px rgba(0,0,0,0.35);
+  will-change:left,top;
 }
 .train.derailed{
-  animation:derailShake 0.4s ease 2;
+  animation:derailShake 0.35s ease 2;
 }
 @keyframes derailShake{
   0%,100%{transform:translate(-50%,-50%) rotate(0deg)}
@@ -74,7 +74,7 @@
 }
 
 .puff{
-  position:absolute;font-size:32px;
+  position:absolute;font-size:36px;
   pointer-events:none;
   animation:puffOut 0.9s ease forwards;
   transform:translate(-50%,-50%);
@@ -86,24 +86,14 @@
   100%{opacity:0;transform:translate(-50%,-100%) scale(1.6)}
 }
 
-/* Switch tap highlight */
-.switch-hit{
-  cursor:pointer;
-  transition:transform 0.15s;
+/* ─── In-board junction levers (tap to cycle state) ─── */
+.junction-lever{
   transform-box:fill-box;
   transform-origin:center;
+  transition:transform 0.1s;
 }
-.switch-hit:hover{transform:scale(1.15)}
-.switch-hit:active{transform:scale(0.9)}
-.switch-flash{
-  animation:switchFlash 0.4s ease;
-  transform-box:fill-box;
-  transform-origin:center;
-}
-@keyframes switchFlash{
-  0%,100%{transform:scale(1)}
-  50%{transform:scale(1.3)}
-}
+.junction-lever:hover{transform:scale(1.08)}
+.junction-lever:active{transform:scale(0.94)}
 
 .st-controls{
   display:flex;gap:10px;justify-content:center;

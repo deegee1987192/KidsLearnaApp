@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "kidslearn-static",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5173"],
-      "port": 5173
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve.js"],
+      "port": 5174
     }
   ]
 }

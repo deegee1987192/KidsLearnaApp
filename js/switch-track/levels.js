@@ -1,22 +1,32 @@
-// Switch Track — level definitions.
+// Switch Track — level definitions (v4: shared depot + levers at every branch).
 //
-// Grid tokens (each cell in the grid):
-//   '.'      empty (grass)
-//   'G'      start marker (must match `start.r,c`)
-//   'h','v'  horizontal / vertical straight
-//   'ne','nw','se','sw'  curve — the letters name the two sides that connect
-//                        e.g. 'ne' connects N + E (an └ elbow)
-//   '+'      cross (straight-through on both axes)
-//   'S:A'    switch, key 'A' — states live in `switches.A`
-//   'T:red'  station colored red (accepts train from any side)
+// KEY MECHANICS
+//   • All trains launch from a shared `depot` cell, staggered by 3s.
+//   • Trains circulate on a shared track network once launched.
+//   • Every branching cell is a junction (J:X) with a lever the kid can
+//     tap AT ANY TIME (including mid-play) to change routing.
+//   • Same-cell / head-on collisions crash; wrong-color house crashes.
+//   • Level clears when every train has parked at its matching-color house.
 //
-// Switch spec:
-//   { states: [ ['W','N'], ['W','S'] ],  // 2 or more toggle options
-//     defaultState: 0 }
+// GRID TOKENS
+//   '.'                 empty (grass)
+//   'h','v'             straight track
+//   'ne','nw','se','sw' curves (letters = the two connected sides)
+//   'J:A'               junction with key 'A' (routing in `junctions.A`)
+//   'H:red'             house of that color (parks matching train, crashes others)
 //
-// The kid taps a switch to cycle its state, then presses GO.
-// Simulator runs the train from `start` in direction `start.dir` and follows
-// track connections until it reaches a station, derails, or loops.
+// LEVEL SCHEMA
+//   depot:  { r, c, dir }             single spawn cell + direction (all trains)
+//   trains: [ { color }, ... ]        launched from depot, 3s apart in order
+//   junctions: { KEY: { states, defaultState } }
+//
+// Every junction cell must be tagged 'J:KEY' — plain '+' or curved cells
+// have no lever, so use 'J:KEY' anywhere the kid should get to choose.
+//
+// Junction state maps are  { enteringSide: exitingSide }. Physical sides at
+// a junction cell = union of every side referenced across all states. There
+// is no derail: a junction always provides a valid exit for any incoming
+// direction the level uses.
 
 const TRACK_CONNS = {
   h:  ['W','E'],
@@ -28,245 +38,357 @@ const TRACK_CONNS = {
   '+':['N','S','E','W'],
 };
 
-const STATION_COLORS = {
+const HOUSE_COLORS = {
   red:   '#EF5350',
   blue:  '#42A5F5',
   green: '#66BB6A',
   yellow:'#FFB300',
   purple:'#AB47BC',
+  orange:'#FF7043',
 };
 
-// L1 — pure tutorial: no switches, just press GO.
+// Trains share the same color as their matching home so pairing is obvious.
+const TRAIN_COLORS = { ...HOUSE_COLORS };
+
+// A T-shaped junction on a vertical loop where a "home spur" branches off
+// east or west. Loop mode passes vertical (↑/↓); the "home" mode diverts
+// trains toward the given side. Labels are pure arrows.
+function spurLever(exit, defaultState = 0){
+  const homeArrow = { E:'➡', W:'⬅', N:'⬆', S:'⬇' }[exit];
+  return {
+    states: [
+      { label:'↕',       map:{ N:'S', S:'N' } },        // loop straight
+      { label:homeArrow, map:{ N:exit, S:exit } },      // divert into house
+    ],
+    defaultState,
+  };
+}
+
+// A fixed-routing T-junction — no lever appears on it (single state), just
+// used to plumb the depot spur into the main loop. All incoming directions
+// exit toward the side given (defaults tuned per-level).
+function fixedT(map){
+  return { states:[ { label:'', map } ], defaultState:0 };
+}
+
+// Same but for horizontal-flowing loop (E↔W); divert N or S into home.
+function spurLeverH(exit, defaultState = 0){
+  return {
+    states: [
+      { label:'↔',   map:{ E:'W', W:'E' } },
+      { label:'🏠',  map:{ E:exit, W:exit } },
+    ],
+    defaultState,
+  };
+}
+
+// A 4-way crossing lever. State 0 = straight through both axes. State 1 =
+// right-hand redirect (N→E→S→W→N cycle).
+function crossLever(defaultState = 0){
+  return {
+    states: [
+      { label:'✕',  map:{ N:'S', S:'N', E:'W', W:'E' } },
+      { label:'⤴',  map:{ N:'E', E:'S', S:'W', W:'N' } },
+    ],
+    defaultState,
+  };
+}
+
+// ─── L1 — First Loop ────────────────────────────────────────
+// One train, one lever, one home. Depot is OUTSIDE the loop; the depot spur
+// joins the loop at J:D (a fixed T, no visible lever). Trains can never
+// return to the depot.
 const L1 = {
-  id:1, name:'First Track', scene:'day',
-  cellSize:60, rows:5, cols:7,
-  hint:"Press GO ▶ to send the train home!",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'red',
+  id:1, name:'First Loop', scene:'day', cellSize:52,
+  hint:'Press GO — then tap Lever A when the train is close, to send it home.',
   grid:[
-    ['.','.','.','.','.','.','.'],
-    ['.','.','.','.','.','.','.'],
-    ['G','h','h','h','h','h','T:red'],
-    ['.','.','.','.','.','.','.'],
-    ['.','.','.','.','.','.','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','v', '.','.','.','J:A','H:red'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{},
+  depot: { r:6, c:1, dir:'N' },
+  trains:[ { color:'red' } ],
+  junctions:{
+    // A: home lever — loop straight (N↔S) or divert east into H:red.
+    A: spurLever('E'),
+    // D: depot spur T — fixed. Depot arrivals (S) exit E onto the loop's
+    //    bottom; loop arrivals from N (top) also exit E (never route back
+    //    toward the depot at S); loop arrivals from E turn N (up the left
+    //    column). No lever — the kid has no meaningful choice here.
+    D: fixedT({ S:'E', N:'E', E:'N' }),
+  },
 };
 
-// L2 — one switch, pick UP (red) or DOWN (blue). Target: red.
+// ─── L2 — Two Trains, One Loop ──────────────────────────────
+// Two trains launch from the SAME depot 3s apart. They share one loop and
+// two home spurs. RED must arrive home BEFORE BLUE — get them in the wrong
+// order and Wiz says try again.
 const L2 = {
-  id:2, name:'Pick a Path', scene:'day',
-  cellSize:60, rows:5, cols:6,
-  hint:"Tap the switch to point ⬆ or ⬇, then GO. Reach RED.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'red',
+  id:2, name:'Share the Loop', scene:'day', cellSize:48,
+  hint:'Red home FIRST, then blue! Flip A for red, then B for blue.',
   grid:[
-    ['.','.','.','.','T:red','.'],
-    ['.','.','.','se','nw','.'],
-    ['G','h','h','S:A','.','.'],
-    ['.','.','.','ne','sw','.'],
-    ['.','.','.','.','T:blue','.'],
+    ['.','se','h','h','h','h','h','sw','.'],
+    ['.','v', '.','.','.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','.','.','J:B','H:blue'],
+    ['.','v', '.','.','.','.','.','v', '.'],
+    ['.','J:D','h','h','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.','.', '.'],
+    ['.','D', '.','.','.','.','.','.', '.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','S'] ], defaultState:0 },
+  depot: { r:6, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' } ],
+  parkOrder:[ 'red', 'blue' ],
+  junctions:{
+    A: spurLever('W'),   // divert west into H:red
+    B: spurLever('E'),   // divert east into H:blue
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L3 — same layout, target changed to BLUE. Teaches "same switch, different goal".
+// ─── L3 — Three Trains ─────────────────────────────────────
+// Same depot pattern as L2 but three trains, three homes stacked on the left.
+// No parkOrder yet — just teach the "one lever per train" rhythm.
 const L3 = {
-  id:3, name:'Blue Bound', scene:'day',
-  cellSize:60, rows:5, cols:6,
-  hint:"Same track — but this time deliver to BLUE.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'blue',
+  id:3, name:'Three Trains', scene:'jungle', cellSize:44,
+  hint:'Three trains, three homes! Flip each lever at the right moment.',
   grid:[
-    ['.','.','.','.','T:red','.'],
-    ['.','.','.','se','nw','.'],
-    ['G','h','h','S:A','.','.'],
-    ['.','.','.','ne','sw','.'],
-    ['.','.','.','.','T:blue','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','S'] ], defaultState:0 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' } ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L4 — two switches, three-way branch reunites at GREEN
-//
-// Switch A picks up / straight / down.
-// Switch B accepts train from N / W / S depending on how A routed it,
-// always exiting E into the green station.
-//
-//    row 0: . . . . . . . .
-//    row 1: . . . se h sw . .
-//    row 2: G h h SA . SB h Tg
-//    row 3: . . . ne h nw . .
-//    row 4: . . . . . . . .
+// ─── L4 — Order Matters ────────────────────────────────────
+// Same layout as L3 but with a strict parking order (red → blue → green).
+// Divert the wrong train first and Wiz calls it out.
 const L4 = {
-  id:4, name:'Two Choices', scene:'jungle',
-  cellSize:58, rows:5, cols:8,
-  hint:"Set BOTH switches so the train reaches GREEN.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'green',
+  id:4, name:'Order Matters', scene:'jungle', cellSize:44,
+  hint:'RED first, then BLUE, then GREEN. Divert them in that order!',
   grid:[
-    ['.','.','.','.',   '.', '.',   '.','.'],
-    ['.','.','.','se',  'h', 'sw',  '.','.'],
-    ['G','h','h','S:A', '.', 'S:B', 'h','T:green'],
-    ['.','.','.','ne',  'h', 'nw',  '.','.'],
-    ['.','.','.','.',   '.', '.',   '.','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
-    B:{ states:[ ['N','E'], ['W','E'], ['S','E'] ], defaultState:1 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' } ],
+  parkOrder:[ 'red', 'blue', 'green' ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L5 — two switches, upper vs lower loop, both reach YELLOW
+// ─── L5 — Four Trains ──────────────────────────────────────
+// Four trains, four homes across BOTH sides of a rectangle. Right column now
+// has a home too (yellow).
 const L5 = {
-  id:5, name:'Roundabout', scene:'jungle',
-  cellSize:58, rows:5, cols:8,
-  hint:"Both loops reach YELLOW — but both switches must agree.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'yellow',
+  id:5, name:'Four Trains', scene:'night', cellSize:40,
+  hint:'Four trains, four homes on both sides — flip each lever in time.',
   grid:[
-    ['.','.','se','h','h','h','sw','.'],
-    ['.','.','v','.','.','.','v','.'],
-    ['G','h','S:A','.','.','.','S:B','T:yellow'],
-    ['.','.','v','.','.','.','v','.'],
-    ['.','.','ne','h','h','h','nw','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','S'] ], defaultState:0 },
-    B:{ states:[ ['N','E'], ['S','E'] ], defaultState:0 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' } ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L6 — 3-way switch, 3 stations, target PURPLE (middle)
+// ─── L6 — Four in Order ────────────────────────────────────
+// L5 layout + parkOrder (red → blue → green → yellow).
 const L6 = {
-  id:6, name:'Three Stations', scene:'day',
-  cellSize:56, rows:7, cols:7,
-  hint:"Three stations! Pick PURPLE.",
-  start:{ r:3, c:0, dir:'E' },
-  targetColor:'purple',
+  id:6, name:'Four in Order', scene:'night', cellSize:40,
+  hint:'RED, BLUE, GREEN, YELLOW — in that order!',
   grid:[
-    ['.','.','.','.','.','.','T:red'],
-    ['.','.','.','se','h','h','nw'],
-    ['.','.','.','v','.','.','.'],
-    ['G','h','h','S:A','h','h','T:purple'],
-    ['.','.','.','v','.','.','.'],
-    ['.','.','.','ne','h','h','sw'],
-    ['.','.','.','.','.','.','T:blue'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' } ],
+  parkOrder:[ 'red', 'blue', 'green', 'yellow' ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L7 — two 3-way switches, cleaner topology reaching BLUE
+// ─── L7 — Both Sides ───────────────────────────────────────
+// Homes on left AND right at multiple rows. 5 tappable levers.
 const L7 = {
-  id:7, name:'Crossroads', scene:'night',
-  cellSize:52, rows:5, cols:9,
-  hint:"Both switches must line up — reach BLUE.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'blue',
+  id:7, name:'Both Sides', scene:'space', cellSize:36,
+  hint:'Homes on both sides! Five levers to manage.',
   grid:[
-    ['.','.','se','h','h','h','h','sw','.'],
-    ['.','.','v','.','.','.','.','v','.'],
-    ['G','h','S:A','h','h','h','h','S:B','T:blue'],
-    ['.','.','v','.','.','.','.','v','.'],
-    ['.','.','ne','h','h','h','h','nw','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','J:F','H:purple'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
-    B:{ states:[ ['N','E'], ['W','E'], ['S','E'] ], defaultState:1 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' }, { color:'purple' } ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    F: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L8 — train starts heading SOUTH; single switch to pick straight-down (green) or turn right (red)
+// ─── L8 — Both Sides, In Order ─────────────────────────────
+// L7 + strict order.
 const L8 = {
-  id:8, name:'Head South', scene:'candy',
-  cellSize:56, rows:6, cols:6,
-  hint:"Train starts heading DOWN! Reach GREEN.",
-  start:{ r:0, c:1, dir:'S' },
-  targetColor:'green',
+  id:8, name:'Both Sides, In Order', scene:'space', cellSize:36,
+  hint:'RED, BLUE, GREEN, YELLOW, PURPLE — in order across both sides!',
   grid:[
-    ['.','G','.','.','.','.'],
-    ['.','v','.','.','.','.'],
-    ['.','S:A','h','h','h','T:red'],
-    ['.','v','.','.','.','.'],
-    ['.','v','.','.','.','.'],
-    ['.','T:green','.','.','.','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','J:F','H:purple'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','v', '.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['N','S'], ['N','E'] ], defaultState:0 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' }, { color:'purple' } ],
+  parkOrder:[ 'red', 'blue', 'green', 'yellow', 'purple' ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    F: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L9 — three switches, target PURPLE. Middle switch B routes N or S,
-// then C on the right column picks N/straight/S.
+// ─── L9 — Big Yard ─────────────────────────────────────────
+// Wider loop with a sixth home on the right side.
 const L9 = {
-  id:9, name:'Three Switches', scene:'space',
-  cellSize:50, rows:5, cols:9,
-  hint:"Three switches to align — aim for PURPLE.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'purple',
+  id:9, name:'Big Yard', scene:'space', cellSize:34,
+  hint:'A bigger loop with six homes! Take your time.',
   grid:[
-    ['.','.','.','.','se','h','h','sw','.'],
-    ['.','.','.','.','v','.','.','v','.'],
-    ['G','h','S:A','h','S:B','h','h','S:C','T:purple'],
-    ['.','.','.','.','v','.','.','v','.'],
-    ['.','.','.','.','ne','h','h','nw','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','J:F','H:purple'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','J:G','H:orange'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    // A: only straight (state 1 pure straight-through, state 0 same as straight)
-    // A is a 2-state where both go E — makes it a "warm-up" switch (either works).
-    A:{ states:[ ['W','E'], ['W','E'] ], defaultState:0 },
-    // B: pick N / straight / S
-    B:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
-    // C: accept from N / W / S, always exit E
-    C:{ states:[ ['N','E'], ['W','E'], ['S','E'] ], defaultState:1 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' }, { color:'purple' }, { color:'orange' } ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    F: spurLever('E'),
+    G: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
-// L9 refined — A is useless as-is. Give A a real choice: bypass or go through B/C.
-// Make A pick E (straight into B) or S (short-cut down and around to red decoy).
-// Simpler: revert to a straight-only A but with meaningful B and C. Actually
-// let's just make L9 punchy: 3 real 3-way switches, only one combination wins.
-L9.switches = {
-  A:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
-  B:{ states:[ ['W','N'], ['W','E'], ['W','S'] ], defaultState:1 },
-  C:{ states:[ ['N','E'], ['W','E'], ['S','E'] ], defaultState:1 },
-};
-// Adjust grid: A now can send train N/E/S. Add small curves so N/S go somewhere
-// reasonable (both dead-end for now — kid learns "straight is right for A").
-L9.grid = [
-  ['.','.','.','.','se','h','h','sw','.'],
-  ['.','.','.','.','v','.','.','v','.'],
-  ['G','h','S:A','h','S:B','h','h','S:C','T:purple'],
-  ['.','.','.','.','v','.','.','v','.'],
-  ['.','.','.','.','ne','h','h','nw','.'],
-];
-
-// L10 — grand finale: 3 switches, 3 stations, target YELLOW (middle)
-// Two identical "H" shapes side by side; kid must route through both.
+// ─── L10 — Grand Central ───────────────────────────────────
+// Grand finale: L9 + strict order across all six trains.
 const L10 = {
-  id:10, name:"Wiz's Grand Route", scene:'space',
-  cellSize:50, rows:5, cols:10,
-  hint:"Grand finale! Route all the way to YELLOW.",
-  start:{ r:2, c:0, dir:'E' },
-  targetColor:'yellow',
+  id:10, name:'Grand Central', scene:'space', cellSize:32,
+  hint:'Grand Central! Six trains, six homes, in strict order. You got this!',
   grid:[
-    ['.','.','se','h','sw','.','se','h','sw','.'],
-    ['.','.','v','.','v','.','v','.','v','.'],
-    ['G','h','S:A','.','S:B','h','S:C','.','S:D','T:yellow'],
-    ['.','.','v','.','v','.','v','.','v','.'],
-    ['.','.','ne','h','nw','.','ne','h','nw','.'],
+    ['.','se','h','h','h','sw','.'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:red','J:A','.','.','.','J:E','H:yellow'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:blue','J:B','.','.','.','J:F','H:purple'],
+    ['.','v', '.','.','.','v', '.'],
+    ['H:green','J:C','.','.','.','J:G','H:orange'],
+    ['.','v', '.','.','.','v', '.'],
+    ['.','J:D','h','h','h','nw','.'],
+    ['.','v', '.','.','.','.','.'],
+    ['.','D', '.','.','.','.','.'],
   ],
-  switches:{
-    A:{ states:[ ['W','N'], ['W','S'] ], defaultState:0 },
-    B:{ states:[ ['N','E'], ['S','E'] ], defaultState:0 },
-    C:{ states:[ ['W','N'], ['W','S'] ], defaultState:0 },
-    D:{ states:[ ['N','E'], ['S','E'] ], defaultState:0 },
+  depot: { r:10, c:1, dir:'N' },
+  trains:[ { color:'red' }, { color:'blue' }, { color:'green' }, { color:'yellow' }, { color:'purple' }, { color:'orange' } ],
+  parkOrder:[ 'red', 'blue', 'green', 'yellow', 'purple', 'orange' ],
+  junctions:{
+    A: spurLever('W'),
+    B: spurLever('W'),
+    C: spurLever('W'),
+    E: spurLever('E'),
+    F: spurLever('E'),
+    G: spurLever('E'),
+    D: fixedT({ S:'E', N:'E', E:'N' }),
   },
 };
 
@@ -274,6 +396,7 @@ const LEVELS = [L1, L2, L3, L4, L5, L6, L7, L8, L9, L10];
 
 window.KL = window.KL || {};
 window.KL.switchTrack = window.KL.switchTrack || {};
-window.KL.switchTrack.TRACK_CONNS   = TRACK_CONNS;
-window.KL.switchTrack.STATION_COLORS = STATION_COLORS;
-window.KL.switchTrack.LEVELS         = LEVELS;
+window.KL.switchTrack.TRACK_CONNS  = TRACK_CONNS;
+window.KL.switchTrack.HOUSE_COLORS = HOUSE_COLORS;
+window.KL.switchTrack.TRAIN_COLORS = TRAIN_COLORS;
+window.KL.switchTrack.LEVELS       = LEVELS;

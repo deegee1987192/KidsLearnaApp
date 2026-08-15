@@ -1,28 +1,45 @@
-// Switch Track — engine, renderer, animation, state.
-// Expects levels.js already loaded.
+// Switch Track — v3: circulating trains on shared loops.
+//   • Trains keep moving around the track network once GO is pressed.
+//   • Kid flips junction levers *during play* to divert trains into their homes.
+//   • Same-cell / head-on collisions crash; wrong-color house crashes.
+//   • Level clears when every train has parked at its matching-color house.
+//
+// Expects levels.js already loaded (window.KL.switchTrack.LEVELS et al).
 
 (function(){
-  const { LEVELS, TRACK_CONNS, STATION_COLORS } = window.KL.switchTrack;
+  const { LEVELS, TRACK_CONNS, HOUSE_COLORS, TRAIN_COLORS } = window.KL.switchTrack;
   const { setScene } = window.KL.scene;
   const { say: wizSay } = window.KL.wiz;
   const { launchConfetti } = window.KL.confetti;
   const { el } = window.KL.util;
 
   const SVGNS = 'http://www.w3.org/2000/svg';
-  const OPP  = { N:'S', S:'N', E:'W', W:'E' };
-  const STEP = { N:[-1,0], S:[1,0], E:[0,1], W:[0,-1] };
+  const OPP   = { N:'S', S:'N', E:'W', W:'E' };
+  const STEP  = { N:[-1,0], S:[1,0], E:[0,1], W:[0,-1] };
   const SIDE_VEC = { N:[0,-1], S:[0,1], E:[1,0], W:[-1,0] };
+  const TICK_MS  = 520;      // wall-clock ms per movement step
+  const MAX_TICKS = 400;     // safety cap so a runaway loop doesn't run forever
+  const TRAIN_EMOJI = '🚂';
+  // Junction pin visuals — all levers use the same white pin + purple arrow so
+  // they don't clash with any train color. Only the small letter badge is tinted
+  // per-junction so kids can tell A/B/C apart.
+  const LEVER_PIN_BG    = '#FFFFFF';
+  const LEVER_PIN_EDGE  = '#263238';
+  const LEVER_ARROW_FG  = '#5E35B1';   // purple
+  const LEVER_BADGE_TINTS = ['#5E35B1','#00838F','#EF6C00','#2E7D32','#AD1457','#455A64'];
 
-  // ─── Parse each grid cell token into a cell object ────────
+  // ─── Grid parsing ─────────────────────────────────────────
   function parseCell(token){
-    if(token==='.' || token==='G') return { type: token==='G' ? 'start' : 'empty' };
-    if(token.startsWith('S:')) return { type:'switch', key: token.slice(2) };
-    if(token.startsWith('T:')) return { type:'station', color: token.slice(2) };
-    if(token in TRACK_CONNS || token==='+') return { type: token };
+    if(token === '.' || token === '') return { type:'empty' };
+    if(token === 'D') return { type:'depot' };
+    if(token.startsWith('J:')) return { type:'junction', key: token.slice(2) };
+    if(token.startsWith('H:')) return { type:'house', color: token.slice(2) };
+    if(token in TRACK_CONNS || token === '+') return { type: token };
     return { type:'empty' };
   }
 
   function buildTiles(level){
+    if(level._tiles) return level._tiles;
     const rows = level.grid.length;
     const cols = level.grid[0].length;
     const tiles = Array.from({length:rows}, ()=>Array(cols).fill(null));
@@ -32,472 +49,618 @@
       }
     }
     level._tiles = tiles;
-    level._rows = rows;
-    level._cols = cols;
+    level._rows  = rows;
+    level._cols  = cols;
     return tiles;
   }
 
-  // ─── Simulate train movement given current switch states ──
-  function simulate(level, switchStates){
-    const tiles = level._tiles || buildTiles(level);
-    let { r, c, dir } = level.start;
-    const path = [{ r, c, kind:'start', dir }];
-    const MAX = 200;
-    for(let step=0; step<MAX; step++){
-      const [dr, dc] = STEP[dir];
-      r += dr; c += dc;
-      if(r<0 || c<0 || r>=level._rows || c>=level._cols)
-        return { path, outcome:'derail', reason:'off-grid' };
-      const cell = tiles[r][c];
-      if(!cell || cell.type==='empty' || cell.type==='start')
-        return { path, outcome:'derail', reason:'no-track' };
-      const enter = OPP[dir];
-
-      if(cell.type==='station'){
-        path.push({ r, c, kind:'station', enter, color: cell.color });
-        return { path, outcome:'station', color: cell.color };
-      }
-
-      let conns;
-      if(cell.type==='switch'){
-        const spec = level.switches[cell.key];
-        const s = switchStates[cell.key] ?? spec.defaultState ?? 0;
-        conns = spec.states[s];
-      } else if(cell.type==='+'){
-        conns = [enter, OPP[enter]];
-      } else {
-        conns = TRACK_CONNS[cell.type];
-      }
-      if(!conns || !conns.includes(enter))
-        return { path: [...path, {r,c,kind:'derail',enter}], outcome:'derail', reason:'bad-connect' };
-      const exit = conns.find(x => x !== enter);
-      if(!exit)
-        return { path: [...path, {r,c,kind:'derail',enter}], outcome:'derail', reason:'no-exit' };
-      path.push({ r, c, kind:'track', enter, exit });
-      dir = exit;
+  function junctionSides(spec){
+    const set = new Set();
+    for(const s of spec.states){
+      for(const k in s.map){ set.add(k); set.add(s.map[k]); }
     }
-    return { path, outcome:'loop' };
+    return [...set];
   }
 
-  // ─── Validate all levels are solvable (dev sanity) ────────
-  function isSolvable(level){
-    const keys = Object.keys(level.switches);
-    const spec = keys.map(k => level.switches[k].states.length);
-    const total = spec.reduce((a,b)=>a*b, 1);
-    for(let i=0; i<total; i++){
-      const state = {};
-      let x = i;
-      for(let k=0; k<keys.length; k++){
-        state[keys[k]] = x % spec[k];
-        x = Math.floor(x / spec[k]);
-      }
-      const r = simulate(level, state);
-      if(r.outcome==='station' && r.color === level.targetColor) return true;
-    }
-    return false;
-  }
-
-  // ─── Compute animation path "d" attribute in board coords ─
-  function pathToD(level, path){
-    const CELL = level.cellSize;
-    const half = CELL/2;
-    let d = '';
-    for(let i=0; i<path.length; i++){
-      const seg = path[i];
-      const cx = seg.c*CELL + half;
-      const cy = seg.r*CELL + half;
-      if(i===0){
-        // start cell: begin at center, exit toward dir
-        d = `M ${cx} ${cy}`;
-        const [vx, vy] = SIDE_VEC[seg.dir];
-        d += ` L ${cx+vx*half} ${cy+vy*half}`;
-      } else {
-        const [ax, ay] = SIDE_VEC[seg.enter];
-        d += ` L ${cx+ax*half} ${cy+ay*half}`;
-        if(seg.kind==='track' && seg.exit){
-          const [bx, by] = SIDE_VEC[seg.exit];
-          if(isStraightPair(seg.enter, seg.exit)){
-            d += ` L ${cx+bx*half} ${cy+by*half}`;
-          } else {
-            d += ` Q ${cx} ${cy} ${cx+bx*half} ${cy+by*half}`;
-          }
-        } else {
-          d += ` L ${cx} ${cy}`;
-        }
-      }
-    }
-    return d;
-  }
-
-  function isStraightPair(a,b){
-    return (a==='N'&&b==='S') || (a==='S'&&b==='N') || (a==='E'&&b==='W') || (a==='W'&&b==='E');
-  }
-
-  // ─── Draw the board SVG ───────────────────────────────────
-  function renderBoard(level, switchStates, onSwitchTap){
-    buildTiles(level);
-    const CELL = level.cellSize;
-    const W = level._cols * CELL;
-    const H = level._rows * CELL;
-    const svg = document.createElementNS(SVGNS, 'svg');
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.setAttribute('width',  W);
-    svg.setAttribute('height', H);
-    svg.classList.add('board');
-
-    // Checker grass
-    for(let r=0; r<level._rows; r++){
-      for(let c=0; c<level._cols; c++){
-        const bg = mk('rect', { x:c*CELL, y:r*CELL, width:CELL, height:CELL,
-          fill: (r+c)%2 ? '#9CCC65' : '#AED581' });
-        svg.appendChild(bg);
-      }
-    }
-
-    // Track base — draw tracks for every non-empty cell
-    for(let r=0; r<level._rows; r++){
-      for(let c=0; c<level._cols; c++){
-        const cell = level._tiles[r][c];
-        drawCell(svg, r, c, cell, level, switchStates, onSwitchTap);
-      }
-    }
-
-    // Start marker (drawn on top of track)
-    drawStartMarker(svg, level.start.r, level.start.c, CELL, level.start.dir);
-
-    return svg;
-  }
-
+  // ─── SVG rendering primitives ─────────────────────────────
   function mk(tag, attrs){
     const e = document.createElementNS(SVGNS, tag);
     for(const k in attrs) e.setAttribute(k, attrs[k]);
     return e;
   }
-
-  function drawCell(svg, r, c, cell, level, switchStates, onSwitchTap){
-    const CELL = level.cellSize;
-    if(cell.type==='empty') return;
-
-    if(cell.type==='station'){
-      drawStation(svg, r, c, CELL, cell.color);
-      return;
-    }
-    if(cell.type==='switch'){
-      const spec = level.switches[cell.key];
-      const s = switchStates[cell.key] ?? spec.defaultState ?? 0;
-      // Draw all states faintly, then active brightly
-      for(let i=0; i<spec.states.length; i++){
-        drawTrackConns(svg, r, c, CELL, spec.states[i], i===s ? '#37474F' : 'rgba(55,71,79,0.18)', i===s ? 14 : 10);
-      }
-      // Interactive halo — tappable
-      const cx = c*CELL + CELL/2;
-      const cy = r*CELL + CELL/2;
-      const halo = mk('circle', {
-        cx, cy, r: CELL*0.32,
-        fill:'#FFB300', 'fill-opacity':0.35,
-        stroke:'#F57C00', 'stroke-width':3,
-        class:'switch-hit',
-        'data-switch-key': cell.key,
-      });
-      halo.style.cursor = 'pointer';
-      halo.addEventListener('click', () => onSwitchTap(cell.key, halo));
-      svg.appendChild(halo);
-      // Small state indicator (dot count)
-      const label = mk('text', {
-        x:cx, y:cy+4,
-        'text-anchor':'middle',
-        'font-family':"'Fredoka One',cursive",
-        'font-size': Math.round(CELL*0.28),
-        fill:'#5D4037',
-        'pointer-events':'none',
-      });
-      label.textContent = '↻';
-      svg.appendChild(label);
-      return;
-    }
-    // Plain track cell
-    const conns = cell.type==='+' ? TRACK_CONNS['+'] : TRACK_CONNS[cell.type];
-    if(conns) drawTrackConns(svg, r, c, CELL, conns, '#37474F', 14);
+  function appendLine(svg, x1, y1, x2, y2, color, width){
+    svg.appendChild(mk('line', { x1, y1, x2, y2, stroke:color, 'stroke-width':width, 'stroke-linecap':'round' }));
+  }
+  function isStraightPair(a,b){
+    return (a==='N'&&b==='S') || (a==='S'&&b==='N') || (a==='E'&&b==='W') || (a==='W'&&b==='E');
   }
 
   function drawTrackConns(svg, r, c, CELL, conns, color, width){
-    const cx = c*CELL + CELL/2;
-    const cy = r*CELL + CELL/2;
-    const half = CELL/2;
-    // Group conns into path segments
+    const cx = c*CELL + CELL/2, cy = r*CELL + CELL/2, half = CELL/2;
     if(conns.length === 4){
-      // cross — two crossing lines
       appendLine(svg, cx-half, cy, cx+half, cy, color, width);
       appendLine(svg, cx, cy-half, cx, cy+half, color, width);
       return;
     }
     if(conns.length === 2){
-      const [a, b] = conns;
-      const [ax, ay] = SIDE_VEC[a];
-      const [bx, by] = SIDE_VEC[b];
+      const [a,b] = conns;
+      const [ax,ay] = SIDE_VEC[a]; const [bx,by] = SIDE_VEC[b];
       const sx = cx+ax*half, sy = cy+ay*half;
       const ex = cx+bx*half, ey = cy+by*half;
       if(isStraightPair(a,b)){
         appendLine(svg, sx, sy, ex, ey, color, width);
       } else {
-        const p = mk('path', {
-          d: `M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`,
-          fill:'none', stroke:color, 'stroke-width':width,
-          'stroke-linecap':'round',
-        });
-        svg.appendChild(p);
+        svg.appendChild(mk('path', {
+          d:`M ${sx} ${sy} Q ${cx} ${cy} ${ex} ${ey}`,
+          fill:'none', stroke:color, 'stroke-width':width, 'stroke-linecap':'round',
+        }));
       }
       return;
     }
-    // 3+ conns: draw each side-to-center as its own segment
     for(const s of conns){
-      const [vx, vy] = SIDE_VEC[s];
+      const [vx,vy] = SIDE_VEC[s];
       appendLine(svg, cx, cy, cx+vx*half, cy+vy*half, color, width);
     }
   }
 
-  function appendLine(svg, x1, y1, x2, y2, color, width){
-    const l = mk('line', { x1, y1, x2, y2, stroke:color, 'stroke-width':width, 'stroke-linecap':'round' });
-    svg.appendChild(l);
+  function drawDepot(svg, r, c, CELL){
+    const cx = c*CELL + CELL/2, cy = r*CELL + CELL/2;
+    // Base building — brown/wood colored so it reads as "depot", not house
+    svg.appendChild(mk('rect', {
+      x:c*CELL+4, y:r*CELL+4, width:CELL-8, height:CELL-8,
+      rx:8, ry:8, fill:'#8D6E63', stroke:'#3E2723', 'stroke-width':2.5,
+    }));
+    // Roof stripe
+    svg.appendChild(mk('rect', {
+      x:c*CELL+8, y:r*CELL+8, width:CELL-16, height:7,
+      fill:'#3E2723', rx:2, ry:2,
+    }));
+    // Train icon
+    const t = mk('text', {
+      x:cx, y:cy + Math.round(CELL*0.16),
+      'text-anchor':'middle', 'font-size': Math.round(CELL*0.48),
+    });
+    t.textContent = '🚂';
+    svg.appendChild(t);
+    // Tiny "HOME" tag
+    const tag = mk('text', {
+      x:cx, y:r*CELL + CELL - 5,
+      'text-anchor':'middle',
+      'font-family':"'Fredoka One',cursive",
+      'font-size': Math.max(8, Math.round(CELL*0.16)),
+      fill:'#FFF3E0',
+    });
+    tag.textContent = 'DEPOT';
+    svg.appendChild(tag);
   }
 
-  function drawStation(svg, r, c, CELL, colorKey){
-    const cx = c*CELL + CELL/2;
-    const cy = r*CELL + CELL/2;
-    const color = STATION_COLORS[colorKey] || '#888';
-    // Station platform
+  function drawHouse(svg, r, c, CELL, colorKey){
+    const cx = c*CELL + CELL/2, cy = r*CELL + CELL/2;
+    const color = HOUSE_COLORS[colorKey] || '#888';
     svg.appendChild(mk('rect', {
-      x: c*CELL + 6, y: r*CELL + 6,
-      width: CELL - 12, height: CELL - 12,
-      rx: 10, ry: 10,
-      fill: color,
-      stroke: '#263238', 'stroke-width': 2,
+      x:c*CELL+6, y:r*CELL+6, width:CELL-12, height:CELL-12,
+      rx:10, ry:10, fill:color, stroke:'#263238', 'stroke-width':2,
     }));
-    // Roof
     svg.appendChild(mk('rect', {
-      x: c*CELL + 10, y: r*CELL + 10,
-      width: CELL - 20, height: 8,
-      fill: '#263238', rx: 3, ry: 3,
+      x:c*CELL+10, y:r*CELL+10, width:CELL-20, height:8,
+      fill:'#263238', rx:3, ry:3,
     }));
-    // House emoji
     const t = mk('text', {
-      x: cx, y: cy + Math.round(CELL*0.10),
-      'text-anchor':'middle',
-      'font-size': Math.round(CELL*0.42),
+      x:cx, y:cy + Math.round(CELL*0.10),
+      'text-anchor':'middle', 'font-size': Math.round(CELL*0.42),
     });
     t.textContent = '🏠';
     svg.appendChild(t);
   }
 
-  function drawStartMarker(svg, r, c, CELL, dir){
-    const cx = c*CELL + CELL/2;
-    const cy = r*CELL + CELL/2;
-    // Big rounded circle
-    svg.appendChild(mk('circle', {
-      cx, cy, r: CELL*0.32,
-      fill:'#FFF9C4', stroke:'#F57F17', 'stroke-width':3,
+  function drawJunctionLever(svg, r, c, CELL, key, badgeTint, stateLabel, stateIdx, stateCount, onTap){
+    const cx = c*CELL + CELL/2, cy = r*CELL + CELL/2;
+    const R = Math.max(14, Math.round(CELL*0.38));
+    const g = mk('g', { class:'junction-lever', 'data-key':key });
+    g.style.cursor = 'pointer';
+
+    // Halo/shadow
+    g.appendChild(mk('circle', { cx, cy, r:R+2, fill:'rgba(0,0,0,0.25)' }));
+    // White pin so it never clashes with any train color
+    g.appendChild(mk('circle', {
+      cx, cy, r:R, fill:LEVER_PIN_BG, stroke:LEVER_PIN_EDGE, 'stroke-width':2.5,
     }));
-    const arrow = { N:'↑', S:'↓', E:'→', W:'←' }[dir] || '→';
-    const t = mk('text', {
-      x: cx, y: cy + Math.round(CELL*0.14),
+    // Purple arrow — the current-state label glyph
+    const arrow = mk('text', {
+      x:cx, y:cy + Math.round(R*0.36),
       'text-anchor':'middle',
       'font-family':"'Fredoka One',cursive",
-      'font-size': Math.round(CELL*0.45),
-      fill:'#E65100',
+      'font-size': Math.round(R*1.15),
+      fill:LEVER_ARROW_FG,
+      'pointer-events':'none',
     });
-    t.textContent = arrow;
-    svg.appendChild(t);
+    arrow.textContent = stateLabel;
+    g.appendChild(arrow);
+
+    // Colored letter badge (top-right) so kid can tell A/B/C apart at a glance
+    const bx = cx + R*0.62, by = cy - R*0.62;
+    g.appendChild(mk('circle', { cx:bx, cy:by, r:R*0.32, fill:badgeTint, stroke:'#fff', 'stroke-width':1.5 }));
+    const badge = mk('text', {
+      x:bx, y:by + R*0.12,
+      'text-anchor':'middle',
+      'font-family':"'Fredoka One',cursive",
+      'font-size': Math.round(R*0.42),
+      fill:'#fff',
+      'pointer-events':'none',
+    });
+    badge.textContent = key;
+    g.appendChild(badge);
+
+    g.addEventListener('click', onTap);
+    svg.appendChild(g);
   }
 
-  // ─── State machine for a level session ────────────────────
+  function renderBoard(level, junctionStates){
+    buildTiles(level);
+    const CELL = level.cellSize;
+    const W = level._cols * CELL, H = level._rows * CELL;
+    const svg = mk('svg', { viewBox:`0 0 ${W} ${H}`, width:W, height:H });
+    svg.classList.add('board');
+
+    // Static layers — never change during play
+    for(let r=0; r<level._rows; r++){
+      for(let c=0; c<level._cols; c++){
+        svg.appendChild(mk('rect', {
+          x:c*CELL, y:r*CELL, width:CELL, height:CELL,
+          fill:(r+c)%2 ? '#9CCC65' : '#AED581',
+        }));
+      }
+    }
+    // Non-junction tracks (static)
+    for(let r=0; r<level._rows; r++){
+      for(let c=0; c<level._cols; c++){
+        const cell = level._tiles[r][c];
+        if(cell.type === 'empty' || cell.type === 'house' || cell.type === 'junction' || cell.type === 'depot') continue;
+        const conns = cell.type === '+' ? TRACK_CONNS['+'] : TRACK_CONNS[cell.type];
+        if(conns) drawTrackConns(svg, r, c, CELL, conns, '#37474F', 14);
+      }
+    }
+    // Houses & depot (static)
+    for(let r=0; r<level._rows; r++){
+      for(let c=0; c<level._cols; c++){
+        const cell = level._tiles[r][c];
+        if(cell.type === 'house') drawHouse(svg, r, c, CELL, cell.color);
+        if(cell.type === 'depot') drawDepot(svg, r, c, CELL);
+      }
+    }
+    // Dynamic layer — only this changes when a lever is flipped.
+    const jGroup = mk('g', { id:'junctions-group' });
+    svg.appendChild(jGroup);
+    populateJunctions(jGroup, level, junctionStates);
+
+    return svg;
+  }
+
+  function populateJunctions(jGroup, level, junctionStates){
+    // Clear existing children
+    while(jGroup.firstChild) jGroup.removeChild(jGroup.firstChild);
+    const CELL = level.cellSize;
+    const keys = Object.keys(level.junctions);
+    keys.forEach((key, i) => {
+      const spec = level.junctions[key];
+      // Find junction cell coords
+      let jr = -1, jc = -1;
+      for(let r=0; r<level._rows && jr === -1; r++){
+        for(let c=0; c<level._cols; c++){
+          const cell = level._tiles[r][c];
+          if(cell.type === 'junction' && cell.key === key){ jr = r; jc = c; break; }
+        }
+      }
+      if(jr === -1) return;
+
+      // Faint physical sides
+      const sides = junctionSides(spec);
+      const cx = jc*CELL + CELL/2, cy = jr*CELL + CELL/2;
+      for(const s of sides){
+        const [vx,vy] = SIDE_VEC[s];
+        appendLine(jGroup, cx, cy, cx+vx*CELL/2, cy+vy*CELL/2, 'rgba(55,71,79,0.35)', 12);
+      }
+      // Active-state bold routes
+      const sIdx = junctionStates[key] ?? spec.defaultState ?? 0;
+      const map = spec.states[sIdx].map;
+      const drawn = new Set();
+      for(const from in map){
+        const to = map[from];
+        const pair = [from,to].sort().join(',');
+        if(drawn.has(pair)) continue;
+        drawn.add(pair);
+        drawTrackConns(jGroup, jr, jc, CELL, [from,to], '#37474F', 14);
+      }
+      // Tappable pin (skip if single fixed state)
+      if(spec.states.length < 2) return;
+      const stateLabel = spec.states[sIdx].label;
+      drawJunctionLever(jGroup, jr, jc, CELL, key,
+        LEVER_BADGE_TINTS[i % LEVER_BADGE_TINTS.length],
+        stateLabel, sIdx, spec.states.length,
+        () => cycleJunction(key));
+    });
+  }
+
+  function cycleJunction(key){
+    const spec = currentLevel().junctions[key];
+    const cur = state.junctionStates[key] ?? spec.defaultState ?? 0;
+    state.junctionStates[key] = (cur + 1) % spec.states.length;
+    // Only re-render the junctions group; trains and static layers untouched
+    const jGroup = document.querySelector('#boardWrap svg #junctions-group');
+    if(jGroup){
+      populateJunctions(jGroup, currentLevel(), state.junctionStates);
+    }
+  }
+
+  // ─── State ────────────────────────────────────────────────
   const state = {
     levelIndex: 0,
-    switchStates: {},
-    animating: false,
     completed: new Array(LEVELS.length).fill(false),
-    onCleanup: null,
+    junctionStates: {},
+    trains: [],        // live train state during play
+    simTick: 0,
+    running: false,    // is the tick loop active
+    _loopTimer: null,
   };
 
   function currentLevel(){ return LEVELS[state.levelIndex]; }
 
-  function initSwitchStates(){
-    state.switchStates = {};
-    for(const k in currentLevel().switches){
-      state.switchStates[k] = currentLevel().switches[k].defaultState ?? 0;
+  function initJunctionStates(){
+    state.junctionStates = {};
+    for(const k in currentLevel().junctions){
+      state.junctionStates[k] = currentLevel().junctions[k].defaultState ?? 0;
     }
   }
 
-  function mountLevel(){
+  function initTrains(){
+    const lvl = currentLevel();
+    const gap = Math.max(1, Math.round(3000 / TICK_MS));  // ~6 ticks per 3s
+    state.trains = lvl.trains.map((t, i) => {
+      const start = t.start || lvl.depot;
+      return {
+        index:i, color:t.color,
+        r:start.r, c:start.c, dir:start.dir,
+        launchTick: (t.launchTick != null) ? t.launchTick : (i * gap),
+        status:'waiting',
+      };
+    });
+    state.parkedCount = 0;   // for parkOrder enforcement
+  }
+
+  // ─── Rendering the play surface ───────────────────────────
+  function redrawBoard(){
+    const wrap = document.getElementById('boardWrap');
+    wrap.innerHTML = '';
     const level = currentLevel();
+    const svg = renderBoard(level, state.junctionStates);
+    wrap.appendChild(svg);
+    wrap.style.width  = svg.getAttribute('width') + 'px';
+    wrap.style.height = svg.getAttribute('height') + 'px';
+    // Spawn train elements (hidden until launched)
+    for(let i=0; i<state.trains.length; i++){
+      const t = state.trains[i];
+      spawnTrainEl(i, t.color, t.r, t.c);
+    }
+  }
+
+  function spawnTrainEl(i, color, r, c){
+    const wrap = document.getElementById('boardWrap');
+    const CELL = currentLevel().cellSize;
+    const tr = el('div','train', TRAIN_EMOJI);
+    tr.id = `train-${i}`;
+    tr.dataset.color = color;
+    tr.style.setProperty('--train-tint', TRAIN_COLORS[color] || '#888');
+    tr.style.left = (c*CELL + CELL/2) + 'px';
+    tr.style.top  = (r*CELL + CELL/2) + 'px';
+    tr.style.transition = 'none';
+    tr.style.opacity = '0';   // hidden until first launch tick
+    wrap.appendChild(tr);
+  }
+
+  function animateTrainTo(i, r, c, fadeOut){
+    const CELL = currentLevel().cellSize;
+    const tr = document.getElementById(`train-${i}`);
+    if(!tr) return;
+    tr.style.transition = `left ${TICK_MS}ms linear, top ${TICK_MS}ms linear` +
+      (fadeOut ? `, opacity 300ms ease ${TICK_MS-100}ms` : '');
+    tr.style.left = (c*CELL + CELL/2) + 'px';
+    tr.style.top  = (r*CELL + CELL/2) + 'px';
+    if(fadeOut) tr.style.opacity = '0';
+  }
+
+  function showTrain(i, r, c){
+    const CELL = currentLevel().cellSize;
+    const tr = document.getElementById(`train-${i}`);
+    if(!tr) return;
+    tr.style.transition = 'none';
+    tr.style.left = (c*CELL + CELL/2) + 'px';
+    tr.style.top  = (r*CELL + CELL/2) + 'px';
+    tr.style.opacity = '1';
+  }
+
+  function showCrash(i, r, c){
+    const CELL = currentLevel().cellSize;
+    const wrap = document.getElementById('boardWrap');
+    const tr = document.getElementById(`train-${i}`);
+    if(tr){
+      tr.style.transition = `left ${TICK_MS}ms linear, top ${TICK_MS}ms linear`;
+      tr.style.left = (c*CELL + CELL/2) + 'px';
+      tr.style.top  = (r*CELL + CELL/2) + 'px';
+      tr.classList.add('derailed');
+      setTimeout(() => { tr.style.opacity = '0'; }, TICK_MS);
+    }
+    const puff = el('div','puff','💥');
+    puff.style.left = (c*CELL + CELL/2) + 'px';
+    puff.style.top  = (r*CELL + CELL/2) + 'px';
+    wrap.appendChild(puff);
+    setTimeout(() => puff.remove(), 900);
+  }
+
+  // ─── Live tick loop ──────────────────────────────────────
+  function startLoop(){
+    if(state.running) return;
+    initTrains();
+    state.simTick = 0;
+    state.running = true;
+    document.getElementById('stGo').textContent = 'STOP ⏹';
+    document.getElementById('stGo').classList.add('stop');
+    document.getElementById('stNext').classList.add('hidden');
+    document.getElementById('stOutcome').textContent = '';
+    document.getElementById('stOutcome').className = 'st-outcome';
+    // Wall-clock tick — do NOT drive off animation events (browsers throttle
+    // compositor animations when the tab is hidden; setTimeout still fires).
+    state._loopTimer = setInterval(tickStep, TICK_MS);
+    // Kick the first tick immediately so trains launch at tick 0
+    tickStep();
+  }
+
+  function stopLoop(){
+    if(state._loopTimer){ clearInterval(state._loopTimer); state._loopTimer = null; }
+    state.running = false;
+    const go = document.getElementById('stGo');
+    go.textContent = 'GO ▶';
+    go.classList.remove('stop');
+  }
+
+  function tickStep(){
+    const level = currentLevel();
+    const tiles = level._tiles;
+
+    // Launch waiting trains whose time has come
+    for(const tr of state.trains){
+      if(tr.status === 'waiting' && state.simTick >= tr.launchTick){
+        tr.status = 'moving';
+        showTrain(tr.index, tr.r, tr.c);
+      }
+    }
+
+    // Compute per-train proposals (reads LIVE junction state)
+    const proposals = state.trains.map(tr => {
+      if(tr.status !== 'moving') return null;
+      const [dr,dc] = STEP[tr.dir];
+      const nr = tr.r + dr, nc = tr.c + dc;
+      if(nr<0 || nc<0 || nr>=level._rows || nc>=level._cols){
+        return { crash:true, reason:'off-grid', r:tr.r, c:tr.c };
+      }
+      const cell = tiles[nr][nc];
+      if(!cell || cell.type === 'empty') return { crash:true, reason:'no-track', r:nr, c:nc };
+      const enter = OPP[tr.dir];
+      if(cell.type === 'house'){
+        if(cell.color === tr.color) return { park:true, r:nr, c:nc };
+        return { crash:true, reason:'wrong-house', r:nr, c:nc };
+      }
+      if(cell.type === 'depot'){
+        // Trains cannot re-enter the depot — one-way spawn only.
+        return { crash:true, reason:'depot-entry', r:nr, c:nc };
+      }
+      let exit;
+      if(cell.type === 'junction'){
+        const spec = level.junctions[cell.key];
+        const sIdx = state.junctionStates[cell.key] ?? spec.defaultState ?? 0;
+        const map = spec.states[sIdx].map;
+        exit = map[enter];
+        if(!exit){
+          // Clockwise fallback — if the lever's current state doesn't handle
+          // this entering side, rotate through cardinals (N→E→S→W→N) until
+          // we find a physical side that isn't the entering one.
+          const sides = new Set(junctionSides(spec));
+          const CW = { N:'E', E:'S', S:'W', W:'N' };
+          let cand = CW[enter];
+          for(let k=0; k<3 && !exit; k++){
+            if(sides.has(cand) && cand !== enter) exit = cand;
+            else cand = CW[cand];
+          }
+        }
+        if(!exit) return { crash:true, reason:'junction-block', r:nr, c:nc };
+      } else if(cell.type === '+'){
+        exit = OPP[enter];
+      } else {
+        const conns = TRACK_CONNS[cell.type];
+        if(!conns || !conns.includes(enter)) return { crash:true, reason:'bad-track', r:nr, c:nc };
+        exit = conns.find(x => x !== enter);
+      }
+      return { r:nr, c:nc, dir:exit };
+    });
+
+    // Same-cell collisions
+    const crashed = new Set();
+    const nextByCell = new Map();
+    proposals.forEach((p, i) => {
+      if(!p || p.crash) return;
+      const k = `${p.r},${p.c}`;
+      if(!nextByCell.has(k)) nextByCell.set(k, []);
+      nextByCell.get(k).push(i);
+    });
+    for(const [, list] of nextByCell){
+      if(list.length > 1) list.forEach(i => crashed.add(i));
+    }
+    // Head-on swaps
+    for(let i=0; i<proposals.length; i++){
+      const p = proposals[i]; if(!p || p.crash) continue;
+      for(let j=i+1; j<proposals.length; j++){
+        const q = proposals[j]; if(!q || q.crash) continue;
+        if(p.r === state.trains[j].r && p.c === state.trains[j].c &&
+           q.r === state.trains[i].r && q.c === state.trains[i].c){
+          crashed.add(i); crashed.add(j);
+        }
+      }
+    }
+
+    // Apply
+    let anyCrashed = false, anyMovedThisTick = false;
+    for(let i=0; i<state.trains.length; i++){
+      const tr = state.trains[i], p = proposals[i];
+      if(!p) continue;
+      if(p.crash){
+        tr.status = 'crashed'; anyCrashed = true;
+        showCrash(i, p.r, p.c);
+        continue;
+      }
+      if(crashed.has(i)){
+        tr.status = 'crashed'; anyCrashed = true;
+        showCrash(i, p.r, p.c);
+        continue;
+      }
+      if(p.park){
+        // If the level requires a specific parking order, verify.
+        const order = currentLevel().parkOrder;
+        if(order && order[state.parkedCount] !== tr.color){
+          tr.status = 'crashed'; tr.crashReason = 'wrong-order';
+          anyCrashed = true;
+          showCrash(i, p.r, p.c);
+          continue;
+        }
+        tr.r = p.r; tr.c = p.c; tr.status = 'parked';
+        state.parkedCount++;
+        animateTrainTo(i, p.r, p.c, true);
+        anyMovedThisTick = true;
+        continue;
+      }
+      tr.r = p.r; tr.c = p.c; tr.dir = p.dir;
+      animateTrainTo(i, p.r, p.c, false);
+      anyMovedThisTick = true;
+    }
+
+    state.simTick++;
+
+    const allParked = state.trains.every(t => t.status === 'parked');
+    const anyCrashedEver = state.trains.some(t => t.status === 'crashed');
+
+    if(allParked && !anyCrashedEver){
+      stopLoop();
+      setTimeout(() => finalizeWin(), TICK_MS);
+      return;
+    }
+    if(anyCrashedEver){
+      stopLoop();
+      setTimeout(() => finalizeCrash(), TICK_MS + 200);
+      return;
+    }
+    if(state.simTick > MAX_TICKS){
+      stopLoop();
+      setTimeout(() => finalizeTimeout(), 400);
+    }
+  }
+
+  function finalizeWin(){
+    const out = document.getElementById('stOutcome');
+    out.textContent = '🎉 All trains home!';
+    out.className = 'st-outcome ok';
+    wizSay('Wonderful! Every train is home! 🚂✨', 'happy');
+    launchConfetti(30);
+    state.completed[state.levelIndex] = true;
+    document.getElementById('stNext').classList.remove('hidden');
+    const dots = document.querySelectorAll('#stLevelDots .level-dot');
+    if(dots[state.levelIndex]) dots[state.levelIndex].classList.add('done');
+  }
+
+  function finalizeCrash(){
+    const crashed = state.trains.filter(t => t.status === 'crashed');
+    const wrongOrder = crashed.some(t => t.crashReason === 'wrong-order');
+    const out = document.getElementById('stOutcome');
+    if(wrongOrder){
+      const order = currentLevel().parkOrder;
+      const need  = (order || []).map(c => c.toUpperCase()).join(' → ');
+      out.textContent = `🚦 Wrong order! Send them ${need}.`;
+    } else {
+      out.textContent = crashed.length === 1
+        ? '💥 One train crashed — try again!'
+        : `💥 ${crashed.length} trains crashed — try again!`;
+    }
+    out.className = 'st-outcome no';
+    wizSay(wrongOrder ? 'Wrong order — try again!' : 'Uh oh — try different levers! 🚦', 'sad');
+    resetTrainsOnly();
+  }
+
+  function finalizeTimeout(){
+    const out = document.getElementById('stOutcome');
+    out.textContent = 'Trains kept circling — try flipping a lever!';
+    out.className = 'st-outcome no';
+    wizSay('The trains need a way home — flip a lever!', 'idle');
+    resetTrainsOnly();
+  }
+
+  function resetTrainsOnly(){
+    // Re-spawn train DOM elements at their start positions for a retry
+    document.querySelectorAll('.train').forEach(t => t.remove());
+    document.querySelectorAll('.puff').forEach(t => t.remove());
+    initTrains();
+    for(let i=0; i<state.trains.length; i++){
+      const t = state.trains[i];
+      spawnTrainEl(i, t.color, t.r, t.c);
+    }
+  }
+
+  // ─── Screen mount ────────────────────────────────────────
+  function mountLevel(){
+    stopLoop();
+    const level = currentLevel();
+    buildTiles(level);
     setScene(level.scene || 'day');
 
     document.getElementById('stLevelLabel').textContent = `Level ${level.id} / ${LEVELS.length}`;
     document.getElementById('stLevelName').textContent  = level.name;
     document.getElementById('stHint').textContent       = level.hint || '';
 
-    // Target station chip
-    const swatch = document.getElementById('stTargetSwatch');
-    swatch.style.background = STATION_COLORS[level.targetColor] || '#888';
-    document.getElementById('stTargetName').textContent = level.targetColor.toUpperCase();
+    const trainsChip = document.getElementById('stTrainsChip');
+    trainsChip.innerHTML = '';
+    for(const t of level.trains){
+      const dot = el('span','st-train-dot');
+      dot.style.background = TRAIN_COLORS[t.color] || '#888';
+      trainsChip.appendChild(dot);
+    }
 
-    // Level dots
     const dots = document.getElementById('stLevelDots');
     dots.innerHTML = '';
     for(let i=0; i<LEVELS.length; i++){
-      const d = el('div', 'level-dot');
+      const d = el('div','level-dot');
       if(state.completed[i]) d.classList.add('done');
       if(i === state.levelIndex) d.classList.add('current');
       dots.appendChild(d);
     }
 
-    initSwitchStates();
+    initJunctionStates();
+    initTrains();
     redrawBoard();
+
     document.getElementById('stOutcome').textContent = '';
     document.getElementById('stOutcome').className = 'st-outcome';
-    document.getElementById('stGo').disabled = false;
     document.getElementById('stNext').classList.add('hidden');
-    wizSay(level.hint || 'Set the switches and press GO!', 'idle');
+    wizSay(level.hint || 'Press GO and flip levers to get trains home!', 'idle');
   }
 
-  function redrawBoard(){
-    const wrap = document.getElementById('boardWrap');
-    if(state.onCleanup) { state.onCleanup(); state.onCleanup = null; }
-    wrap.innerHTML = '';
-    const svg = renderBoard(currentLevel(), state.switchStates, onSwitchTap);
-    wrap.appendChild(svg);
-    // Position the (invisible) train at the start cell for now
-    const train = el('div', 'train', '🚂');
-    train.id = 'train';
-    const CELL = currentLevel().cellSize;
-    const cx = currentLevel().start.c*CELL + CELL/2;
-    const cy = currentLevel().start.r*CELL + CELL/2;
-    train.style.left = cx + 'px';
-    train.style.top  = cy + 'px';
-    train.style.offsetPath = 'none';
-    wrap.appendChild(train);
-    // Sync board size to wrap
-    wrap.style.width  = svg.getAttribute('width') + 'px';
-    wrap.style.height = svg.getAttribute('height') + 'px';
-  }
-
-  function onSwitchTap(key, haloEl){
-    if(state.animating) return;
-    const spec = currentLevel().switches[key];
-    const cur  = state.switchStates[key] ?? spec.defaultState ?? 0;
-    state.switchStates[key] = (cur + 1) % spec.states.length;
-    // Redraw board (simpler than mutating in place)
-    redrawBoard();
-    // Flash the just-tapped switch
-    const newHalo = document.querySelector(`.switch-hit[data-switch-key="${key}"]`);
-    if(newHalo){
-      newHalo.classList.add('switch-flash');
-      setTimeout(()=>newHalo.classList.remove('switch-flash'), 400);
-    }
-  }
-
-  function runTrain(){
-    if(state.animating) return;
-    const level = currentLevel();
-    const result = simulate(level, state.switchStates);
-    const d = pathToD(level, result.path);
-    state.animating = true;
-    document.getElementById('stGo').disabled = true;
-
-    const train = document.getElementById('train');
-    // Snap train onto the offset-path
-    train.style.left = '0px';
-    train.style.top  = '0px';
-    train.style.animation = 'none';
-    train.style.offsetPath = `path("${d}")`;
-    train.style.offsetDistance = '0%';
-    void train.offsetHeight;
-
-    const durSec = Math.max(0.9, result.path.length * 0.32);
-
-    if(state._trainAnim) { try { state._trainAnim.cancel(); } catch(_){} }
-    if(state._trainTimer) clearTimeout(state._trainTimer);
-    const anim = train.animate([
-      { offsetDistance: '0%' },
-      { offsetDistance: '100%' },
-    ], { duration: durSec * 1000, easing: 'linear', fill: 'forwards' });
-    state._trainAnim = anim;
-    // Drive the outcome off wall-clock so it fires even if the tab is
-    // backgrounded (browser throttles compositor animations, but the game
-    // state must still progress).
-    state._trainTimer = setTimeout(() => {
-      state._trainTimer = null;
-      train.style.offsetDistance = '100%';
-      handleResult(result);
-    }, durSec * 1000 + 50);
-  }
-
-  function handleResult(result){
-    state.animating = false;
-    const level = currentLevel();
-    const outcomeEl = document.getElementById('stOutcome');
-    const train = document.getElementById('train');
-    const wrap = document.getElementById('boardWrap');
-
-    if(result.outcome === 'station' && result.color === level.targetColor){
-      // WIN
-      outcomeEl.textContent = '🎉 You did it!';
-      outcomeEl.className = 'st-outcome ok';
-      wizSay('Wonderful! You\'re a train master! 🚂✨', 'happy');
-      launchConfetti(30);
-      state.completed[state.levelIndex] = true;
-      document.getElementById('stGo').disabled = true;
-      document.getElementById('stNext').classList.remove('hidden');
-      // Update level dot immediately
-      const dots = document.querySelectorAll('#stLevelDots .level-dot');
-      if(dots[state.levelIndex]) dots[state.levelIndex].classList.add('done');
-    } else if(result.outcome === 'station'){
-      // Wrong station
-      outcomeEl.textContent = `Oops — that's the ${result.color.toUpperCase()} station!`;
-      outcomeEl.className = 'st-outcome no';
-      wizSay(`We wanted ${level.targetColor.toUpperCase()}! Try again! 🌈`, 'sad');
-      setTimeout(()=>{
-        document.getElementById('stGo').disabled = false;
-        train.style.transition = 'none';
-        train.style.offsetPath = 'none';
-        const CELL = level.cellSize;
-        train.style.left = (level.start.c*CELL + CELL/2) + 'px';
-        train.style.top  = (level.start.r*CELL + CELL/2) + 'px';
-      }, 900);
-    } else {
-      // Derail or loop
-      train.classList.add('derailed');
-      // Puff of smoke at the last cell
-      const lastSeg = result.path[result.path.length-1];
-      if(lastSeg){
-        const CELL = level.cellSize;
-        const puff = el('div', 'puff', '💨');
-        puff.style.left = (lastSeg.c*CELL + CELL/2) + 'px';
-        puff.style.top  = (lastSeg.r*CELL + CELL/2) + 'px';
-        wrap.appendChild(puff);
-        setTimeout(()=>puff.remove(), 900);
-      }
-      outcomeEl.textContent = '💨 Off the track! Try different switches.';
-      outcomeEl.className = 'st-outcome no';
-      wizSay('Uh oh — check the switches! 🚦', 'sad');
-      setTimeout(()=>{
-        train.classList.remove('derailed');
-        document.getElementById('stGo').disabled = false;
-        train.style.transition = 'none';
-        train.style.offsetPath = 'none';
-        const CELL = level.cellSize;
-        train.style.left = (level.start.c*CELL + CELL/2) + 'px';
-        train.style.top  = (level.start.r*CELL + CELL/2) + 'px';
-      }, 1100);
-    }
+  function onGoClicked(){
+    if(state.running) stopLoop();
+    else startLoop();
   }
 
   function resetLevel(){
-    if(state.animating) return;
-    initSwitchStates();
+    stopLoop();
+    initJunctionStates();
+    initTrains();
     redrawBoard();
     document.getElementById('stOutcome').textContent = '';
     document.getElementById('stOutcome').className = 'st-outcome';
-    document.getElementById('stGo').disabled = false;
     document.getElementById('stNext').classList.add('hidden');
   }
 
@@ -506,15 +669,14 @@
       state.levelIndex++;
       mountLevel();
     } else {
-      // All levels done — end screen
       showEnd();
     }
   }
 
   function showEnd(){
+    stopLoop();
     document.getElementById('stGameScreen').classList.add('hidden');
-    const end = document.getElementById('stEndScreen');
-    end.classList.remove('hidden');
+    document.getElementById('stEndScreen').classList.remove('hidden');
     const wins = state.completed.filter(Boolean).length;
     document.getElementById('stEndScore').textContent = `${wins} / ${LEVELS.length}`;
     launchConfetti(60);
@@ -529,26 +691,10 @@
     mountLevel();
   }
 
-  // Dev sanity: log any unsolvable levels to the console
-  function selfTest(){
-    const bad = [];
-    for(const lvl of LEVELS){
-      buildTiles(lvl);
-      if(!isSolvable(lvl)) bad.push(lvl.id + ' ' + lvl.name);
-    }
-    if(bad.length){
-      console.warn('[Switch Track] UNSOLVABLE levels:', bad);
-    } else {
-      console.log('[Switch Track] all ' + LEVELS.length + ' levels solvable ✓');
-    }
-  }
-
-  // ─── Boot ─────────────────────────────────────────────────
   function boot(){
-    selfTest();
-    document.getElementById('stGo').onclick    = runTrain;
-    document.getElementById('stReset').onclick = resetLevel;
-    document.getElementById('stNext').onclick  = nextLevel;
+    document.getElementById('stGo').onclick        = onGoClicked;
+    document.getElementById('stReset').onclick     = resetLevel;
+    document.getElementById('stNext').onclick      = nextLevel;
     document.getElementById('stPlayAgain').onclick = restart;
     mountLevel();
   }
