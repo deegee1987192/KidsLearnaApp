@@ -66,7 +66,8 @@
     playerStep: 0,      // how many correct taps so far this round
     lives: 3,
     phase: 'idle',      // 'idle' | 'playing' | 'input' | 'done'
-    round: 0,           // endless mode round counter
+    round: 0,           // endless mode round counter (legacy)
+    audioUnlocked: false, // becomes true after the first user gesture
     _seqTimers: [],     // pending setTimeouts (playback + phase switch)
   };
 
@@ -169,6 +170,15 @@
 
     disablePads(true);
     wizSay(level.hint || 'Listen and copy!', 'idle');
+
+    // Auto-play the sequence for any level after the first once the audio
+    // context has been unlocked (by the kid's first LISTEN tap). No manual
+    // click needed to hear each new level.
+    if(state.audioUnlocked){
+      state._seqTimers.push(setTimeout(() => {
+        if(state.phase === 'idle') playSequence();
+      }, 700));
+    }
   }
 
   // ─── Playback ─────────────────────────────────────────────
@@ -228,6 +238,7 @@
   function onPadTap(key){
     if(state.phase !== 'input') return;
     ensureCtx();
+    state.audioUnlocked = true;
 
     const padDef = PADS.find(p => p.key === key);
     const padEl  = document.querySelector(`.ct-pad[data-key="${key}"]`);
@@ -344,6 +355,7 @@
 
   function onListenClicked(){
     ensureCtx();
+    state.audioUnlocked = true;
     if(state.phase === 'idle'){
       playSequence();
     } else if(state.phase === 'done'){
