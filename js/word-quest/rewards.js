@@ -20,8 +20,29 @@
 
   const games = {};   // key → module
   let deck = [];      // shuffled remaining keys
+  let correctCount = 0;   // total correct answers so far this run
+  const EVERY = 10;       // reward game after every N correct answers
 
   function register(key, module){ games[key] = module; }
+
+  // Quiz calls this once per CORRECT answer. Every 10th correct answer
+  // launches the next reward game (difficulty ramps with each reward).
+  // onReward(bonusStars) fires when the reward finishes; if no reward was
+  // due this answer it is called immediately with 0 so the quiz can just
+  // resume in one code path.
+  function noteCorrect(onReward){
+    correctCount++;
+    if(correctCount % EVERY === 0){
+      trigger(correctCount / EVERY, onReward || (()=>{}));
+      return true;
+    }
+    if(onReward) onReward(0);
+    return false;
+  }
+
+  // Reset counters + reshuffle the deck for a fresh play-through.
+  function resetProgress(){ correctCount = 0; deck = []; }
+  function correctSoFar(){ return correctCount; }
 
   function tierForRound(round){
     if(round <= 1) return 'easy';
@@ -115,5 +136,6 @@
   // Dev/test hook: force a specific sport to be the next one played.
   function _forceNext(key){ if(games[key]) deck.unshift(key); }
 
-  WQ.rewards = { register, trigger, tierForRound, games, _forceNext };
+  WQ.rewards = { register, trigger, noteCorrect, resetProgress, correctSoFar,
+                 tierForRound, games, _forceNext };
 })();
