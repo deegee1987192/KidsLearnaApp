@@ -1,15 +1,23 @@
-// Shared audio helpers — chime, crash, and gentle background music.
-// Uses Web Audio API (no asset files, works offline).
+// Shared audio — chime, crash, tones, and gentle background music.
+// Web Audio API (no asset files, works offline).
 //
-// AudioContext must be unlocked by a user gesture first, so any game that
-// wants sound should call KL.audio.unlock() from inside a click handler
-// (or on the very first user interaction). After that, playChime/playCrash
-// and startBgMusic/stopBgMusic work.
+// Mobile notes:
+//  • unlock() resumes the context AND plays a 1-sample silent buffer inside the
+//    user gesture — iOS needs that to actually start audio.
+//  • On load this module auto-arms: the FIRST tap/keypress anywhere unlocks
+//    audio and (unless muted) starts background music, and a floating 🔊/🔇
+//    toggle is mounted so kids/parents can control + confirm sound.
+//    A page can opt out of background music with `window.KL_BG_MUSIC = false`
+//    set before this script runs. (iOS hardware mute switch still silences
+//    Web Audio — that's an OS limitation, not something we can override.)
 
 (function(){
-  let ctx = null;
-  let bgGain = null;
-  let bgTimer = null;
+  let ctx = null, bgGain = null, bgTimer = null;
+  let armed = false, installed = false, toggleBtn = null;
+
+  const LS_KEY = 'kl-muted';
+  let muted = false;
+  try { muted = localStorage.getItem(LS_KEY) === '1'; } catch(_){}
 
   function getCtx(){
     if(!ctx){
@@ -21,9 +29,22 @@
     return ctx;
   }
 
-  function unlock(){ return getCtx(); }
+  function unlock(){
+    const ac = getCtx();
+    if(!ac) return null;
+    // iOS: play a silent 1-sample buffer inside the gesture to fully unlock.
+    try {
+      const buf = ac.createBuffer(1, 1, 22050);
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(ac.destination);
+      src.start(0);
+    } catch(_){}
+    return ac;
+  }
 
   function playTone(freq, dur = 0.3, type = 'triangle', vol = 0.25){
+    if(muted) return;
     const ac = getCtx();
     if(!ac) return;
     const now = ac.currentTime;
@@ -39,30 +60,28 @@
     osc.stop(now + dur + 0.05);
   }
 
-  // Happy 3-note major arpeggio (C-E-G) when a train reaches home.
   function playChime(){
     playTone(523.25, 0.22, 'triangle', 0.28);
     setTimeout(() => playTone(659.25, 0.22, 'triangle', 0.28), 90);
     setTimeout(() => playTone(783.99, 0.4,  'triangle', 0.32), 180);
   }
 
-  // Dissonant descending thud on crash.
   function playCrash(){
     playTone(220,    0.25, 'square', 0.18);
     setTimeout(() => playTone(146.83, 0.4,  'square', 0.22), 60);
     setTimeout(() => playTone(98,     0.55, 'sawtooth', 0.18), 140);
   }
 
-  // Gentle looping pentatonic pad — very quiet so it doesn't drown effects.
+  // Gentle looping pentatonic pad.
   const BG_NOTES = [261.63, 329.63, 392.00, 440.00, 523.25, 440.00, 392.00, 329.63];
   const BG_TEMPO_MS = 780;
 
   function startBgMusic(){
-    if(bgTimer) return;
+    if(muted || bgTimer) return;
     const ac = getCtx();
     if(!ac) return;
     bgGain = ac.createGain();
-    bgGain.gain.value = 0.028;
+    bgGain.gain.value = 0.05;
     bgGain.connect(ac.destination);
     let step = 0;
     const tick = () => {
@@ -96,6 +115,63 @@
     }
   }
 
+  // ─── Mute + toggle ────────────────────────────────────────
+  function isMuted(){ return muted; }
+  function setMuted(m){
+    muted = !!m;
+    try { localStorage.setItem(LS_KEY, muted ? '1' : '0'); } catch(_){}
+    if(muted) stopBgMusic();
+    else if(armed && window.KL_BG_MUSIC !== false) startBgMusic();
+    updateToggle();
+  }
+  function toggleMuted(){ setMuted(!muted); }
+
+  function updateToggle(){ if(toggleBtn) toggleBtn.textContent = muted ? '🔇' : '🔊'; }
+
+  function mountToggle(){
+    if(toggleBtn || !document.body) return;
+    toggleBtn = document.createElement('button');
+    toggleBtn.id = 'klSoundToggle';
+    toggleBtn.type = 'button';
+    toggleBtn.setAttribute('aria-label', 'Toggle sound');
+    Object.assign(toggleBtn.style, {
+      position:'fixed', top:'12px', right:'12px', zIndex:'2000',
+      width:'44px', height:'44px', borderRadius:'50%', border:'none',
+      cursor:'pointer', background:'rgba(255,255,255,0.92)',
+      boxShadow:'0 3px 0 rgba(0,0,0,0.15)', fontSize:'20px', padding:'0',
+      display:'flex', alignItems:'center', justifyContent:'center',
+    });
+    toggleBtn.onclick = (e) => { e.stopPropagation(); unlock(); toggleMuted(); };
+    document.body.appendChild(toggleBtn);
+    updateToggle();
+  }
+
+  // First gesture anywhere → unlock + (optionally) start music.
+  function armAutoUnlock(){
+    const onFirst = () => {
+      armed = true;
+      unlock();
+      if(!muted && window.KL_BG_MUSIC !== false) startBgMusic();
+      ['pointerdown','touchstart','keydown'].forEach(ev =>
+        document.removeEventListener(ev, onFirst, true));
+    };
+    ['pointerdown','touchstart','keydown'].forEach(ev =>
+      document.addEventListener(ev, onFirst, true));
+  }
+
+  function install(){
+    if(installed) return;
+    installed = true;
+    mountToggle();
+    armAutoUnlock();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+  else install();
+
   window.KL = window.KL || {};
-  window.KL.audio = { unlock, playTone, playChime, playCrash, startBgMusic, stopBgMusic };
+  window.KL.audio = {
+    unlock, playTone, playChime, playCrash, startBgMusic, stopBgMusic,
+    isMuted, setMuted, toggleMuted, mountToggle, armAutoUnlock,
+    debugState: () => (ctx ? ctx.state : 'none'),
+  };
 })();

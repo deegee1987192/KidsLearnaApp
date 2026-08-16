@@ -14,6 +14,7 @@
   // AudioContext is created lazily on the first user gesture (LISTEN tap)
   // because browsers block auto-created contexts.
   let audioCtx = null;
+  let _iosKicked = false;
   function ensureCtx(){
     if(!audioCtx){
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -21,10 +22,20 @@
       audioCtx = new AC();
     }
     if(audioCtx.state === 'suspended') audioCtx.resume();
+    // iOS: play a 1-sample silent buffer once, inside a gesture, to fully unlock.
+    if(!_iosKicked){
+      _iosKicked = true;
+      try {
+        const b = audioCtx.createBuffer(1, 1, 22050);
+        const s = audioCtx.createBufferSource();
+        s.buffer = b; s.connect(audioCtx.destination); s.start(0);
+      } catch(_){}
+    }
     return audioCtx;
   }
 
   function playNote(freq, durSec = 0.5){
+    if(window.KL && KL.audio && KL.audio.isMuted && KL.audio.isMuted()) return;
     const ac = ensureCtx();
     if(!ac) return;
     const now = ac.currentTime;
