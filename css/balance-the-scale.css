@@ -1,0 +1,169 @@
+/* ═══ BALANCE THE SCALE ═══ */
+
+.bs-card{
+  padding:20px 16px 22px;
+}
+
+.bs-header{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;flex-wrap:wrap;margin-bottom:6px;
+}
+.bs-level-label{
+  font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--navy);
+}
+.bs-level-name{
+  font-family:'Fredoka One',cursive;font-size:1.25rem;color:var(--coral);
+}
+.bs-mode-chip{
+  display:inline-block;font-family:'Fredoka One',cursive;
+  font-size:0.85rem;padding:3px 12px;border-radius:99px;
+  color:white;letter-spacing:1px;
+}
+.bs-mode-chip.match{background:#42A5F5}
+.bs-mode-chip.target{background:#AB47BC}
+
+.bs-target-chip{
+  display:inline-block;font-family:'Fredoka One',cursive;
+  font-size:0.95rem;color:var(--navy);
+  background:#FFF3E0;padding:4px 14px;border-radius:99px;margin-top:6px;
+}
+.bs-target-chip.hidden{display:none}
+
+.bs-hint{
+  text-align:center;color:#5C6BC0;font-weight:800;
+  font-size:0.95rem;line-height:1.35;
+  margin:6px 0 10px;min-height:1.4em;
+}
+
+/* Scale + pans */
+.bs-scale-wrap{
+  position:relative;
+  width:100%;max-width:440px;
+  margin:0 auto 8px;
+}
+.scale{
+  display:block;width:100%;height:auto;
+  filter:drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+}
+
+/* Pan content overlays (weights sitting on each pan) */
+.bs-pans{
+  display:flex;justify-content:space-between;
+  width:100%;max-width:440px;
+  margin:-20px auto 8px;
+  gap:20px;
+}
+.bs-pan{
+  flex:1;min-height:60px;
+  display:flex;flex-direction:column;align-items:center;
+  padding:6px;
+  background:rgba(255,253,231,0.6);
+  border-radius:16px;
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,0.06);
+}
+.bs-pan-label{
+  font-family:'Fredoka One',cursive;font-size:0.8rem;
+  color:var(--navy);letter-spacing:1px;margin-bottom:4px;
+}
+.bs-pan-content{
+  display:flex;flex-wrap:wrap;gap:4px;justify-content:center;
+  min-height:40px;
+}
+.bs-pan-sum{
+  font-family:'Fredoka One',cursive;font-size:1.2rem;
+  color:var(--coral);margin-top:4px;
+}
+
+/* Weight blocks */
+.bs-weight{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:44px;height:44px;
+  border-radius:10px;
+  font-family:'Fredoka One',cursive;font-size:1.35rem;
+  color:white;
+  box-shadow:0 3px 0 rgba(0,0,0,0.25),inset 0 -3px 0 rgba(0,0,0,0.15);
+  cursor:grab;
+  user-select:none;
+  transition:transform 0.1s;
+}
+.bs-weight:hover{transform:translateY(-2px)}
+.bs-weight:active{cursor:grabbing;transform:translateY(1px)}
+.bs-weight.fixed{
+  cursor:default;
+  box-shadow:0 3px 0 rgba(0,0,0,0.4),inset 0 -3px 0 rgba(0,0,0,0.15),
+             0 0 0 3px rgba(255,255,255,0.9);
+}
+.bs-weight.dragging{
+  opacity:0.5;transform:scale(0.9);
+}
+
+/* Tray at bottom */
+.bs-tray{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:8px;
+  padding:14px 12px;
+  background:rgba(255,243,224,0.85);
+  border-radius:16px;
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,0.05);
+  min-height:70px;
+  margin:8px auto;
+  max-width:440px;
+}
+.bs-tray-empty{
+  font-family:'Fredoka One',cursive;font-size:0.9rem;
+  color:#9E9E9E;letter-spacing:1px;padding:14px 0;
+}
+
+/* Drop-target zones (invisible; sit on top of scale pans) */
+.bs-pan-zone{
+  position:absolute;
+  width:100px;height:60px;
+  top:150px;
+  pointer-events:auto;
+}
+.bs-pan-zone[data-side="left"]{ left:30px; }
+.bs-pan-zone[data-side="right"]{ right:30px; }
+.bs-pan-zone.drop-active{
+  background:rgba(102,187,106,0.25);
+  border-radius:16px;
+  box-shadow:inset 0 0 0 3px #66BB6A;
+}
+
+/* Outcome + controls */
+.bs-outcome{
+  text-align:center;font-family:'Fredoka One',cursive;
+  font-size:1.2rem;min-height:1.6rem;margin-top:8px;
+}
+.bs-outcome.ok{color:#388E3C}
+.bs-outcome.no{color:#C62828}
+
+.bs-controls{
+  display:flex;gap:10px;justify-content:center;
+  flex-wrap:wrap;margin-top:10px;
+}
+.bs-btn{
+  font-family:'Fredoka One',cursive;
+  font-size:1.05rem;
+  padding:10px 26px;border:none;border-radius:99px;
+  cursor:pointer;
+  box-shadow:0 5px 0 rgba(0,0,0,0.18);
+  transition:transform 0.1s,box-shadow 0.1s;
+  letter-spacing:1px;color:white;
+}
+.bs-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 7px 0 rgba(0,0,0,0.18)}
+.bs-btn:active:not(:disabled){transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,0.18)}
+.bs-btn.reset{background:#8E24AA;box-shadow:0 5px 0 #5E35B1}
+.bs-btn.next{background:var(--coral);box-shadow:0 5px 0 var(--coral2)}
+
+/* Level dots (same style as Copy the Tune) */
+.level-dots{
+  display:flex;justify-content:center;gap:5px;
+  margin:4px 0 10px;flex-wrap:wrap;
+  max-width:560px;
+}
+.level-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:rgba(255,255,255,0.55);
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,0.15);
+}
+.level-dot.done{background:#66BB6A}
+.level-dot.current{background:#FFB300;transform:scale(1.4);box-shadow:0 0 0 2px rgba(255,179,0,0.35)}

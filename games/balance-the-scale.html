@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balance the Scale — Wiz's Adventure ⚖️</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/balance-the-scale.css">
+</head>
+<body>
+
+<div id="scene" class="day">
+  <div class="sun"></div>
+  <div class="moon"></div>
+  <div class="stars-wrap" id="starsWrap"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="hills">
+    <div class="hill hill1"></div>
+    <div class="hill hill2"></div>
+    <div class="hill hill3"></div>
+  </div>
+  <div class="tree" style="left:5%;bottom:55px"><div class="tree-top"></div><div class="tree-trunk"></div></div>
+  <div class="tree" style="right:8%;bottom:60px"><div class="tree-top" style="width:50px;height:60px"></div><div class="tree-trunk"></div></div>
+</div>
+
+<div id="confetti"></div>
+
+<a href="../index.html" class="back-hub">← Home</a>
+
+<div id="app">
+  <div class="hdr"><div class="logo">⚖️ Balance the Scale</div></div>
+
+  <div id="wizHost"></div>
+
+  <div id="bsGameScreen" style="width:100%">
+    <div class="level-dots" id="bsLevelDots"></div>
+
+    <div class="card bs-card">
+      <div class="bs-header">
+        <div>
+          <div class="bs-level-label" id="bsLevelLabel">Level 1 / 15</div>
+          <div class="bs-level-name"  id="bsLevelName">—</div>
+        </div>
+        <div class="bs-mode-chip" id="bsModeChip">MATCH</div>
+      </div>
+
+      <div style="text-align:center">
+        <div class="bs-target-chip hidden" id="bsTargetChip"></div>
+      </div>
+
+      <div class="bs-hint" id="bsHint"></div>
+
+      <div class="bs-scale-wrap" id="bsScale"></div>
+
+      <div class="bs-pans">
+        <div class="bs-pan">
+          <div class="bs-pan-label">LEFT</div>
+          <div class="bs-pan-content" id="bsPanContentLeft"></div>
+          <div class="bs-pan-sum" id="bsLeftSum">0</div>
+        </div>
+        <div class="bs-pan">
+          <div class="bs-pan-label">RIGHT</div>
+          <div class="bs-pan-content" id="bsPanContentRight"></div>
+          <div class="bs-pan-sum" id="bsRightSum">0</div>
+        </div>
+      </div>
+
+      <div class="bs-tray" id="bsTray"></div>
+
+      <div class="bs-outcome" id="bsOutcome"></div>
+
+      <div class="bs-controls">
+        <button class="bs-btn reset" id="bsReset">RESET</button>
+        <button class="bs-btn next hidden" id="bsNext">NEXT ➜</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bsEndScreen" class="screen hidden">
+    <div class="big-e">🏆</div>
+    <h1>Balance Master!</h1>
+    <p>You balanced the scale on <span id="bsEndScore">0 / 15</span> levels!<br>
+       Wiz is so proud of your math sense! 🦉❤️</p>
+    <button class="play-btn" id="bsPlayAgain">Play Again ⚖️</button>
+  </div>
+</div>
+
+<script src="../js/core/util.js"></script>
+<script src="../js/core/scene.js"></script>
+<script src="../js/core/wiz.js"></script>
+<script src="../js/core/confetti.js"></script>
+<script src="../js/core/audio.js"></script>
+<script src="../js/balance-the-scale/levels.js"></script>
+<script src="../js/balance-the-scale/game.js"></script>
+<script>
+  KL.wiz.mount(document.getElementById('wizHost'), 'Ready to balance the scale?');
+  KL.balanceTheScale.boot();
+</script>
+</body>
+</html>
