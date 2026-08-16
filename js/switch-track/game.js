@@ -12,6 +12,7 @@
   const { say: wizSay } = window.KL.wiz;
   const { launchConfetti } = window.KL.confetti;
   const { el } = window.KL.util;
+  const audio = window.KL.audio || { unlock(){}, playChime(){}, playCrash(){}, startBgMusic(){}, stopBgMusic(){} };
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const OPP   = { N:'S', S:'N', E:'W', W:'E' };
@@ -399,6 +400,8 @@
   // ─── Live tick loop ──────────────────────────────────────
   function startLoop(){
     if(state.running) return;
+    audio.unlock();
+    audio.startBgMusic();
     initTrains();
     state.simTick = 0;
     state.running = true;
@@ -417,6 +420,7 @@
   function stopLoop(){
     if(state._loopTimer){ clearInterval(state._loopTimer); state._loopTimer = null; }
     state.running = false;
+    audio.stopBgMusic();
     const go = document.getElementById('stGo');
     go.textContent = 'GO ▶';
     go.classList.remove('stop');
@@ -514,11 +518,13 @@
       if(p.crash){
         tr.status = 'crashed'; anyCrashed = true;
         showCrash(i, p.r, p.c);
+        audio.playCrash();
         continue;
       }
       if(crashed.has(i)){
         tr.status = 'crashed'; anyCrashed = true;
         showCrash(i, p.r, p.c);
+        audio.playCrash();
         continue;
       }
       if(p.park){
@@ -528,11 +534,13 @@
           tr.status = 'crashed'; tr.crashReason = 'wrong-order';
           anyCrashed = true;
           showCrash(i, p.r, p.c);
+          audio.playCrash();
           continue;
         }
         tr.r = p.r; tr.c = p.c; tr.status = 'parked';
         state.parkedCount++;
         animateTrainTo(i, p.r, p.c, true);
+        audio.playChime();
         anyMovedThisTick = true;
         continue;
       }
