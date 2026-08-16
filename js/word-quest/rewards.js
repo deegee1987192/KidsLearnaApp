@@ -77,6 +77,10 @@
   function setHud(made, need){
     const hud = document.getElementById('wqRewardHud');
     if(!hud) return;
+    if(need > 6){
+      hud.innerHTML = `<span class="wq-hud-score">⭐ ${made} / ${need}</span>`;
+      return;
+    }
     let dots = '';
     for(let i = 0; i < need; i++) dots += (i < made ? '⭐' : '⚪');
     hud.innerHTML = `<span class="wq-hud-score">${dots}</span>`;
