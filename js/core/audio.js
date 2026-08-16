@@ -97,5 +97,5 @@
   }
 
   window.KL = window.KL || {};
-  window.KL.audio = { unlock, playChime, playCrash, startBgMusic, stopBgMusic };
+  window.KL.audio = { unlock, playTone, playChime, playCrash, startBgMusic, stopBgMusic };
 })();

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Quest — Reward Sandbox (dev)</title>
+<link rel="stylesheet" href="../../css/base.css">
+<link rel="stylesheet" href="../../css/word-quest.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px}
+  h1{font-family:'Fredoka One',cursive;color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,0.2);position:relative;z-index:5}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;position:relative;z-index:5}
+  button.dev{font-family:'Fredoka One',cursive;font-size:1rem;padding:10px 18px;border:none;border-radius:14px;
+    cursor:pointer;color:#fff;background:#7C4DFF;box-shadow:0 4px 0 #5E35B1}
+  .tier{font-family:'Fredoka One',cursive;color:#fff;position:relative;z-index:5}
+  #log{font-family:'Fredoka One',cursive;color:#fff;position:relative;z-index:5;min-height:1.4em}
+</style>
+</head>
+<body>
+<div id="scene" class="day">
+  <div class="sun"></div><div class="cloud c1"></div><div class="cloud c2"></div>
+</div>
+<div id="confetti"></div>
+
+<h1>🎮 Reward Sandbox</h1>
+<div class="tier">Tier:
+  <select id="tier">
+    <option value="easy">easy (round 1)</option>
+    <option value="medium">medium (round 2)</option>
+    <option value="hard">hard (round 3+)</option>
+  </select>
+</div>
+<div class="row">
+  <button class="dev" data-sport="soccer">⚽ Soccer</button>
+  <button class="dev" data-sport="basketball">🏀 Basketball</button>
+  <button class="dev" id="deckBtn">🎲 Shuffle deck (next)</button>
+</div>
+<div id="log">Pick a game to test.</div>
+
+<script src="../../js/core/util.js"></script>
+<script src="../../js/core/scene.js"></script>
+<script src="../../js/core/confetti.js"></script>
+<script src="../../js/core/audio.js"></script>
+<script src="../../js/word-quest/rewards.js"></script>
+<script src="../../js/word-quest/rewards/soccer.js"></script>
+<script src="../../js/word-quest/rewards/basketball.js"></script>
+<script>
+  const rewards = KL.wordQuest.rewards;
+  const log = document.getElementById('log');
+  const tierSel = document.getElementById('tier');
+  const roundFor = { easy: 1, medium: 2, hard: 3 };
+
+  document.querySelectorAll('button.dev[data-sport]').forEach(b => {
+    b.onclick = () => {
+      const key = b.dataset.sport;
+      // force this sport next by seeding the internal deck
+      forceNext(key);
+      log.textContent = `Playing ${key} (${tierSel.value})…`;
+      rewards.trigger(roundFor[tierSel.value], (bonus) => {
+        log.textContent = `${key}: finished, bonus = ${bonus}`;
+      });
+    };
+  });
+  document.getElementById('deckBtn').onclick = () => {
+    log.textContent = 'Playing next from shuffled deck…';
+    rewards.trigger(roundFor[tierSel.value], (bonus) => {
+      log.textContent = `Deck game finished, bonus = ${bonus}`;
+    });
+  };
+
+  // Force a specific sport next via the controller's dev hook.
+  function forceNext(key){ if(rewards._forceNext) rewards._forceNext(key); }
+  KL.scene.setScene('day');
+</script>
+</body>
+</html>
