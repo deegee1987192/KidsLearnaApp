@@ -7,7 +7,8 @@
 // Expects levels.js already loaded (window.KL.switchTrack.LEVELS et al).
 
 (function(){
-  const { LEVELS, TRACK_CONNS, HOUSE_COLORS, TRAIN_COLORS } = window.KL.switchTrack;
+  const { TRACK_CONNS, HOUSE_COLORS, TRAIN_COLORS } = window.KL.switchTrack;
+  let LEVELS = window.KL.switchTrack.buildLevels();   // tier-shuffled, fresh each play
   const { setScene } = window.KL.scene;
   const { say: wizSay } = window.KL.wiz;
   const { launchConfetti } = window.KL.confetti;
@@ -692,6 +693,7 @@
   }
 
   function restart(){
+    LEVELS = window.KL.switchTrack.buildLevels();   // new tier-shuffled order
     state.levelIndex = 0;
     state.completed = new Array(LEVELS.length).fill(false);
     document.getElementById('stEndScreen').classList.add('hidden');

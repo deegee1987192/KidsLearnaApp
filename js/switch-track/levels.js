@@ -581,11 +581,36 @@ const L15 = {
   },
 };
 
-const LEVELS = [L1,L2,L3,L4,L5,L6,L7,L8,L9,L10,L11,L12,L13,L14,L15];
+// Three difficulty tiers (oval · theta · crossed-theta). Every level is a
+// pre-verified, solvable layout. buildLevels() shuffles WITHIN each tier so the
+// sequence differs every playthrough while staying easy → hard across tiers.
+const TIERS = [
+  [L1, L2, L3, L4, L5],       // oval
+  [L6, L7, L8, L9, L10],      // theta
+  [L11, L12, L13, L14, L15],  // crossed theta
+];
+
+function shuffleTier(a){
+  const b = [...a];
+  for(let i = b.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+  return b;
+}
+
+// Fresh, tier-shuffled ordering each call. Levels are renumbered 1..15 for
+// display; junction/grid data is read-only during play (live lever state lives
+// in the engine's state.junctionStates), so sharing references is safe.
+function buildLevels(){
+  const order = TIERS.flatMap(shuffleTier);
+  return order.map((lvl, i) => ({ ...lvl, id: i + 1 }));
+}
 
 window.KL = window.KL || {};
 window.KL.switchTrack = window.KL.switchTrack || {};
 window.KL.switchTrack.TRACK_CONNS  = TRACK_CONNS;
 window.KL.switchTrack.HOUSE_COLORS = HOUSE_COLORS;
 window.KL.switchTrack.TRAIN_COLORS = TRAIN_COLORS;
-window.KL.switchTrack.LEVELS       = LEVELS;
+window.KL.switchTrack.buildLevels  = buildLevels;
+window.KL.switchTrack.LEVELS       = buildLevels();   // initial shuffled set

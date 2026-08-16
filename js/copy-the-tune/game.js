@@ -2,7 +2,8 @@
 // Expects levels.js already loaded.
 
 (function(){
-  const { PADS, LEVELS } = window.KL.copyTheTune;
+  const { PADS } = window.KL.copyTheTune;
+  let LEVELS = window.KL.copyTheTune.buildLevels();   // fresh, random each play
   const { setScene } = window.KL.scene;
   const { say: wizSay } = window.KL.wiz;
   const { launchConfetti } = window.KL.confetti;
@@ -385,6 +386,7 @@
   }
 
   function restart(){
+    LEVELS = window.KL.copyTheTune.buildLevels();   // new random melodies
     state.levelIndex = 0;
     state.completed = new Array(LEVELS.length).fill(false);
     document.getElementById('ctEndScreen').classList.add('hidden');

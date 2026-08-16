@@ -169,10 +169,10 @@
   }
 
   // ─── Build one level ──────────────────────────────────────
-  function buildLevel(level){
+  // `picks` = 4 words for this level (3 fill + 1 read), drawn without repeat
+  // within the band by the caller. `wp` is the full band pool (read distractors).
+  function buildLevel(level, picks, wp){
     const band = bandFor(level);
-    const wp = WQ.bank.words[band];
-    const picks = draw(wp, 4);                 // 3 fill + 1 read
     const qs = [];
     picks.slice(0, 3).forEach(it => qs.push(makeFill(it, band)));
     qs.push(makeRead(picks[3], wp));
@@ -186,8 +186,18 @@
   }
 
   function buildLevels(){
+    // One shuffled word queue per band so the 4 levels in a band never reuse a
+    // word (each band pool has 16 words = 4 levels × 4 picks).
+    const queues = {};
+    for(let b = 1; b <= 5; b++) queues[b] = shuffle(WQ.bank.words[b]);
     const out = [];
-    for(let L = 1; L <= 20; L++) out.push(buildLevel(L));
+    for(let L = 1; L <= 20; L++){
+      const band = bandFor(L);
+      const wp = WQ.bank.words[band];
+      let picks = queues[band].splice(0, 4);
+      if(picks.length < 4) picks = picks.concat(draw(wp, 4 - picks.length));  // safety
+      out.push(buildLevel(L, picks, wp));
+    }
     return out;
   }
 

@@ -1,5 +1,6 @@
 (function(){
-  const { LEVELS, WEIGHT_COLORS } = window.KL.balanceTheScale;
+  const { WEIGHT_COLORS } = window.KL.balanceTheScale;
+  let LEVELS = window.KL.balanceTheScale.buildLevels();   // fresh, random each play
   const { setScene } = window.KL.scene;
   const { say: wizSay } = window.KL.wiz;
   const { launchConfetti } = window.KL.confetti;
@@ -290,6 +291,7 @@
   }
 
   function restart(){
+    LEVELS = window.KL.balanceTheScale.buildLevels();   // new random levels
     state.levelIndex = 0;
     state.completed = new Array(LEVELS.length).fill(false);
     document.getElementById('bsEndScreen').classList.add('hidden');

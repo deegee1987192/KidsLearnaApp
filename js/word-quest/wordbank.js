@@ -37,7 +37,7 @@
       {w:'ELEPHANT',e:'🐘'},{w:'BUTTERFLY',e:'🦋'},{w:'DINOSAUR',e:'🦕'},{w:'UMBRELLA',e:'☂️'},
       {w:'KANGAROO',e:'🦘'},{w:'CROCODILE',e:'🐊'},{w:'HELICOPTER',e:'🚁'},{w:'STRAWBERRY',e:'🍓'},
       {w:'PINEAPPLE',e:'🍍'},{w:'HAMBURGER',e:'🍔'},{w:'SNOWFLAKE',e:'❄️'},{w:'HEDGEHOG',e:'🦔'},
-      {w:'DINOSAUR',e:'🦖'},{w:'MUSHROOM',e:'🍄'},{w:'PANCAKES',e:'🥞'},{w:'SQUIRREL',e:'🐿️'},
+      {w:'FLAMINGO',e:'🦩'},{w:'MUSHROOM',e:'🍄'},{w:'PANCAKES',e:'🥞'},{w:'SQUIRREL',e:'🐿️'},
     ],
   };
 
