@@ -55,7 +55,8 @@
     g.gain.setValueAtTime(0.0001, now);
     g.gain.linearRampToValueAtTime(vol, now + 0.02);
     g.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    osc.connect(g).connect(ac.destination);
+    osc.connect(g);
+    g.connect(ac.destination);
     osc.start(now);
     osc.stop(now + dur + 0.05);
   }
@@ -95,7 +96,8 @@
       g.gain.setValueAtTime(0, now);
       g.gain.linearRampToValueAtTime(1, now + 0.08);
       g.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-      osc.connect(g).connect(bgGain);
+      osc.connect(g);
+      g.connect(bgGain);
       osc.start(now);
       osc.stop(now + 0.8);
       step++;
@@ -146,17 +148,22 @@
     updateToggle();
   }
 
-  // First gesture anywhere → unlock + (optionally) start music.
+  // Every gesture anywhere → unlock (re-resume after OS suspension).
+  // Background music starts only on the first gesture.
   function armAutoUnlock(){
-    const onFirst = () => {
-      armed = true;
+    const handler = () => {
       unlock();
-      if(!muted && window.KL_BG_MUSIC !== false) startBgMusic();
-      ['pointerdown','touchstart','keydown'].forEach(ev =>
-        document.removeEventListener(ev, onFirst, true));
+      if(!armed){
+        armed = true;
+        if(!muted && window.KL_BG_MUSIC !== false) startBgMusic();
+      }
     };
     ['pointerdown','touchstart','keydown'].forEach(ev =>
-      document.addEventListener(ev, onFirst, true));
+      document.addEventListener(ev, handler, true));
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible' && ctx && ctx.state === 'suspended')
+        ctx.resume().catch(() => {});
+    });
   }
 
   function install(){
