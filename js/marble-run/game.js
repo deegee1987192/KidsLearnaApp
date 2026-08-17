@@ -9,15 +9,17 @@
   const CELL = 60;
   const CW = COLS * CELL, CH = ROWS * CELL;
   const R = 8;                 // marble radius
-  const G = 0.12;              // gravity per substep
-  const DAMP = 0.45;           // bounce energy retention
-  const FRIC = 0.997;          // air friction
-  const RAMP_FRIC = 0.80;     // extra slow-down on ramp hit
-  const BOUNCER_V = 8.5;      // upward launch speed
-  const BUMPER_PUSH = 1.3;    // bumper push multiplier
-  const MAX_V = 10;
-  const SUB = 4;               // physics substeps per frame
-  const STUCK_LIMIT = 200;     // frames of low speed → lose
+  const G = 0.035;             // gravity per substep
+  const TERM_V = 1.4;          // terminal falling velocity per substep
+  const AIR_FRIC = 0.995;      // friction per substep (horizontal only)
+  const WALL_BOUNCE = 0.3;     // wall bounce energy retention
+  const RAMP_FRIC = 0.7;       // ramp slide friction multiplier
+  const RAMP_MIN = 1.0;        // minimum ramp slide speed per substep
+  const BOUNCER_V = 4.5;       // upward launch speed per substep
+  const BUMPER_PUSH = 1.5;     // bumper push multiplier
+  const MAX_V = 6.0;           // absolute max velocity per substep
+  const SUB = 3;               // physics substeps per frame
+  const STUCK_LIMIT = 250;     // frames of low speed → lose
   const TRAIL_LEN = 18;
 
   const PIECE_CLR = {
@@ -44,6 +46,7 @@
 
   /* ═══ state ═══ */
   let canvas, ctx;
+  var verifying = false;
   let state = reset();
 
   function reset() {
@@ -359,15 +362,16 @@
     if (!m) return;
 
     m.vy += G;
-    m.vx *= FRIC; m.vy *= FRIC;
-    var sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
-    if (sp > MAX_V) { m.vx = m.vx / sp * MAX_V; m.vy = m.vy / sp * MAX_V; }
+    if (m.vy > TERM_V) m.vy = TERM_V;
+    m.vx *= AIR_FRIC;
+    if (Math.abs(m.vx) > MAX_V) m.vx = m.vx > 0 ? MAX_V : -MAX_V;
+    if (Math.abs(m.vy) > MAX_V) m.vy = m.vy > 0 ? MAX_V : -MAX_V;
 
     m.x += m.vx; m.y += m.vy;
 
-    if (m.x - R < 0) { m.x = R; m.vx = Math.abs(m.vx) * DAMP; }
-    if (m.x + R > CW) { m.x = CW - R; m.vx = -Math.abs(m.vx) * DAMP; }
-    if (m.y - R < 0) { m.y = R; m.vy = Math.abs(m.vy) * DAMP; }
+    if (m.x - R < 0) { m.x = R; m.vx = Math.abs(m.vx) * WALL_BOUNCE; }
+    if (m.x + R > CW) { m.x = CW - R; m.vx = -Math.abs(m.vx) * WALL_BOUNCE; }
+    if (m.y - R < 0) { m.y = R; m.vy = Math.abs(m.vy) * WALL_BOUNCE; }
     if (m.y - R > CH + 40) { endRun(false); return; }
 
     var col = clamp(Math.floor(m.x / CELL), 0, COLS - 1);
@@ -392,8 +396,8 @@
     checkStars(m);
     checkBucket(m);
 
-    sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
-    if (sp < 0.25) { state.stuck++; if (state.stuck > STUCK_LIMIT) endRun(false); }
+    var sp = Math.sqrt(m.vx * m.vx + m.vy * m.vy);
+    if (sp < 0.15) { state.stuck++; if (state.stuck > STUCK_LIMIT) endRun(false); }
     else state.stuck = 0;
   }
 
@@ -406,43 +410,42 @@
       var nx = dx / d, ny = dy / d;
       m.x = px + nx * R; m.y = py + ny * R;
       var vn = m.vx * nx + m.vy * ny;
-      if (vn < 0) { m.vx -= (1 + DAMP) * vn * nx; m.vy -= (1 + DAMP) * vn * ny; }
+      if (vn < 0) { m.vx -= (1 + WALL_BOUNCE) * vn * nx; m.vy -= (1 + WALL_BOUNCE) * vn * ny; }
     } else if (d < 0.01 && m.x >= cx && m.x <= cx + CELL && m.y >= cy && m.y <= cy + CELL) {
       var dl = m.x - cx, dr2 = cx + CELL - m.x, dt = m.y - cy, db = cy + CELL - m.y;
       var mn = Math.min(dl, dr2, dt, db);
-      if (mn === dl) { m.x = cx - R; m.vx = -Math.abs(m.vx) * DAMP; }
-      else if (mn === dr2) { m.x = cx + CELL + R; m.vx = Math.abs(m.vx) * DAMP; }
-      else if (mn === dt) { m.y = cy - R; m.vy = -Math.abs(m.vy) * DAMP; }
-      else { m.y = cy + CELL + R; m.vy = Math.abs(m.vy) * DAMP; }
+      if (mn === dl) { m.x = cx - R; m.vx = -Math.abs(m.vx) * WALL_BOUNCE; }
+      else if (mn === dr2) { m.x = cx + CELL + R; m.vx = Math.abs(m.vx) * WALL_BOUNCE; }
+      else if (mn === dt) { m.y = cy - R; m.vy = -Math.abs(m.vy) * WALL_BOUNCE; }
+      else { m.y = cy + CELL + R; m.vy = Math.abs(m.vy) * WALL_BOUNCE; }
     }
   }
 
   function rampCollide(m, cx, cy, type) {
-    var ax, ay, bx, by, nx, ny;
+    var sx, sy, nx, ny, ax;
     if (type === 'ramp-right') {
-      ax = cx; ay = cy; bx = cx + CELL; by = cy + CELL;
+      ax = cx; sx = 1 / Math.SQRT2; sy = 1 / Math.SQRT2;
       nx = 1 / Math.SQRT2; ny = -1 / Math.SQRT2;
     } else {
-      ax = cx + CELL; ay = cy; bx = cx; by = cy + CELL;
+      ax = cx + CELL; sx = -1 / Math.SQRT2; sy = 1 / Math.SQRT2;
       nx = -1 / Math.SQRT2; ny = -1 / Math.SQRT2;
     }
-    var dx = m.x - ax, dy = m.y - ay;
+    var dx = m.x - ax, dy = m.y - cy;
     var dist = dx * nx + dy * ny;
-    var sx = bx - ax, sy = by - ay;
-    var slen = Math.sqrt(sx * sx + sy * sy);
-    var t = (dx * (sx / slen) + dy * (sy / slen)) / slen;
+    var t = (dx * sx + dy * sy) / (CELL * Math.SQRT2);
     if (t < -0.15 || t > 1.15) return;
+    if (dist <= 0 || dist > R + 3) return;
 
-    if (dist > 0 && dist < R + 2) {
-      m.x += nx * (R - dist + 0.5);
-      m.y += ny * (R - dist + 0.5);
-      var vn = m.vx * nx + m.vy * ny;
-      if (vn < 0) {
-        m.vx -= (1 + DAMP) * vn * nx;
-        m.vy -= (1 + DAMP) * vn * ny;
-        m.vx *= RAMP_FRIC; m.vy *= RAMP_FRIC;
-      }
-    }
+    var vNorm = m.vx * nx + m.vy * ny;
+    if (vNorm >= 0) return;
+
+    m.x += nx * (R + 0.5 - dist);
+    m.y += ny * (R + 0.5 - dist);
+
+    var vSurf = m.vx * sx + m.vy * sy;
+    var speed = Math.max(vSurf * RAMP_FRIC, RAMP_MIN);
+    m.vx = sx * speed;
+    m.vy = sy * speed;
   }
 
   function bouncerCollide(m, cx, cy) {
@@ -451,23 +454,38 @@
         m.x > cx + 4 && m.x < cx + CELL - 4) {
       m.y = surfY - R;
       m.vy = -BOUNCER_V;
-      audio.playTone(523.25, 0.12, 'triangle', 0.3);
+      if (!verifying) audio.playTone(523.25, 0.12, 'triangle', 0.3);
     }
   }
 
   function funnelCollide(m, cx, cy) {
-    var midX = cx + CELL / 2, botY = cy + CELL - 6, topY = cy + 6;
-    // Left wall: (cx+6, topY) → (midX, botY)
-    lineCollide(m, cx + 6, topY, midX, botY);
-    // Right wall: (cx+CELL-6, topY) → (midX, botY)
-    lineCollide(m, cx + CELL - 6, topY, midX, botY);
+    var midX = cx + CELL / 2, topY = cy + 6, botY = cy + CELL - 6;
+    if (m.y < topY - R || m.y > botY + R) return;
+    if (m.x < cx || m.x > cx + CELL) return;
+
+    var t = clamp((m.y - topY) / (botY - topY), 0, 1);
+    var halfW = (CELL / 2 - 6) * (1 - t) + 3;
+    var leftEdge = midX - halfW;
+    var rightEdge = midX + halfW;
+
+    if (m.x - R < leftEdge) {
+      m.x = leftEdge + R;
+      if (m.vx < 0) m.vx *= -0.3;
+    }
+    if (m.x + R > rightEdge) {
+      m.x = rightEdge - R;
+      if (m.vx > 0) m.vx *= -0.3;
+    }
+
+    m.vx *= 0.9;
+    m.vx += (midX - m.x) * 0.04;
   }
 
   function lineCollide(m, ax, ay, bx, by) {
     var sx = bx - ax, sy = by - ay;
     var slen = Math.sqrt(sx * sx + sy * sy);
     var sdx = sx / slen, sdy = sy / slen;
-    var nx = -sdy, ny = sdx; // 90° CCW rotation = left normal
+    var nx = -sdy, ny = sdx;
     var dx = m.x - ax, dy = m.y - ay;
     var dist = dx * nx + dy * ny;
     var t = (dx * sdx + dy * sdy) / slen;
@@ -479,9 +497,9 @@
       if (vn * sign < 0) {
         m.x += nx * (sign * (R + 0.5) - dist);
         m.y += ny * (sign * (R + 0.5) - dist);
-        m.vx -= (1 + DAMP) * vn * nx;
-        m.vy -= (1 + DAMP) * vn * ny;
-        m.vx *= RAMP_FRIC; m.vy *= RAMP_FRIC;
+        m.vx -= (1 + WALL_BOUNCE) * vn * nx;
+        m.vy -= (1 + WALL_BOUNCE) * vn * ny;
+        m.vx *= 0.85; m.vy *= 0.85;
       }
     }
   }
@@ -499,7 +517,7 @@
         m.vx -= (1 + BUMPER_PUSH) * vn * nx;
         m.vy -= (1 + BUMPER_PUSH) * vn * ny;
       }
-      audio.playTone(330, 0.08, 'square', 0.15);
+      if (!verifying) audio.playTone(330, 0.08, 'square', 0.15);
     }
   }
 
@@ -512,7 +530,7 @@
       var dx = m.x - sx, dy = m.y - sy;
       if (dx * dx + dy * dy < (R + 12) * (R + 12)) {
         state.collected[i] = true;
-        audio.playTone(880, 0.1, 'sine', 0.25);
+        if (!verifying) audio.playTone(880, 0.1, 'sine', 0.25);
       }
     }
   }
@@ -560,6 +578,7 @@
   function endRun(won) {
     state.phase = won ? 'win' : 'lose';
     if (timerId) { clearTimeout(timerId); timerId = null; }
+    if (verifying) return;
     if (won) {
       if (!state.sandbox) {
         state.done[state.lvl] = true;
@@ -849,5 +868,51 @@
     mountLevel(0);
   }
 
+  function verify() {
+    var origState = state;
+    var results = [];
+    MR.LEVELS.forEach(function (lv, i) {
+      if (!lv.solution) {
+        results.push({ level: i + 1, name: lv.name, result: 'NO SOL' });
+        return;
+      }
+      var placed = new Map();
+      lv.solution.forEach(function (s) { placed.set(key(s[0], s[1]), s[2]); });
+      state = {
+        lvl: i, sandbox: false, phase: 'run', stuck: 0, trail: [],
+        done: [], totalStars: 0, sel: -1, tray: [],
+        marble: {
+          x: lv.marble[0] * CELL + CELL / 2,
+          y: lv.marble[1] * CELL + CELL / 2 + 4,
+          vx: 0, vy: 0
+        },
+        placed: placed,
+        collected: lv.stars.map(function () { return false; }),
+        sbMarble: null, sbBucket: null, sbStars: [], sbPieces: new Map()
+      };
+      verifying = true;
+      var maxFrames = 900;
+      var f;
+      for (f = 0; f < maxFrames; f++) {
+        for (var s = 0; s < SUB; s++) physStep();
+        if (state.phase !== 'run') break;
+      }
+      var sc = state.collected.filter(Boolean).length;
+      var mx = state.marble ? Math.round(state.marble.x) : -1;
+      var my = state.marble ? Math.round(state.marble.y) : -1;
+      results.push({
+        level: i + 1, name: lv.name,
+        result: state.phase === 'win' ? 'PASS' : 'FAIL',
+        stars: sc + '/' + lv.stars.length,
+        frames: f, endX: mx, endY: my
+      });
+    });
+    state = origState;
+    verifying = false;
+    console.table(results);
+    return results;
+  }
+
   MR.boot = boot;
+  MR._verify = verify;
 })();
