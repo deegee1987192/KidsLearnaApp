@@ -1,0 +1,187 @@
+/* ═══ ROCKET LAB ═══ */
+
+.rl-header { text-align:center; margin-bottom:4px }
+.rl-title {
+  font-family:'Fredoka One',cursive;
+  font-size:clamp(1.5rem,4vw,2rem);
+  color:white;
+  text-shadow:2px 2px 0 rgba(0,0,0,0.2);
+  margin-bottom:4px;
+}
+.rl-lvl-label {
+  font-family:'Fredoka One',cursive;
+  font-size:0.95rem;color:white;
+  text-shadow:1px 1px 0 rgba(0,0,0,0.2);
+  margin-bottom:6px;
+}
+
+/* level dots */
+.level-dots {
+  display:flex;justify-content:center;gap:5px;
+  margin:4px 0 6px;flex-wrap:wrap;
+}
+.level-dot {
+  width:10px;height:10px;border-radius:50%;
+  background:rgba(255,255,255,0.55);
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,0.15);
+}
+.level-dot.done { background:#66BB6A }
+.level-dot.current {
+  background:#FFB300;transform:scale(1.4);
+  box-shadow:0 0 0 2px rgba(255,179,0,0.35);
+}
+
+/* game screen */
+.rl-game-screen {
+  position:relative;width:100%;max-width:420px;margin:0 auto;
+}
+.rl-canvas {
+  display:block;width:100%;height:auto;
+  border-radius:16px;
+  box-shadow:0 4px 16px rgba(0,0,0,0.25);
+  touch-action:none;
+  user-select:none;-webkit-user-select:none;
+}
+
+/* ─── Build phase ─────────────────────────── */
+.rl-build { padding:10px 4px;text-align:center }
+.rl-pick-title {
+  font-family:'Fredoka One',cursive;font-size:1.3rem;
+  color:white;text-shadow:2px 2px 0 rgba(0,0,0,0.2);
+  margin-bottom:10px;
+}
+.rl-parts-row {
+  display:flex;gap:8px;justify-content:center;flex-wrap:wrap;
+}
+.rl-part-btn {
+  flex:1;min-width:90px;max-width:130px;
+  padding:12px 8px 10px;border:3px solid transparent;
+  border-radius:16px;background:rgba(255,253,231,0.95);
+  cursor:pointer;text-align:center;
+  transition:transform 0.12s,border-color 0.15s;
+}
+.rl-part-btn:hover {
+  transform:translateY(-3px);border-color:#FFB300;
+}
+.rl-part-btn:active {
+  transform:translateY(1px);border-color:#4CAF50;
+}
+.rl-part-icon { font-size:1.4rem;margin-bottom:4px }
+.rl-part-name {
+  font-family:'Fredoka One',cursive;font-size:0.95rem;color:var(--navy);
+}
+.rl-part-desc {
+  font-size:0.75rem;color:#5C6BC0;font-weight:700;margin-top:2px;
+}
+
+.rl-launch-btn {
+  display:inline-block;margin-top:12px;padding:14px 36px;
+  font-family:'Fredoka One',cursive;font-size:1.4rem;
+  border:none;border-radius:99px;
+  background:#F44336;color:white;cursor:pointer;
+  box-shadow:0 6px 0 #C62828;
+  transition:transform 0.1s,box-shadow 0.1s;
+  animation:rlPulse 1.5s ease-in-out infinite;
+}
+.rl-launch-btn:hover {
+  transform:translateY(-2px);box-shadow:0 8px 0 #C62828;
+}
+.rl-launch-btn:active {
+  transform:translateY(3px);box-shadow:0 2px 0 #C62828;
+  animation:none;
+}
+@keyframes rlPulse {
+  0%,100%{transform:scale(1)}50%{transform:scale(1.05)}
+}
+
+/* ─── HUD ─────────────────────────────────── */
+.rl-hud {
+  position:absolute;top:10px;left:10px;right:10px;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  pointer-events:none;
+}
+.rl-hud-left,.rl-hud-right {
+  display:flex;flex-direction:column;
+}
+.rl-hud-left { align-items:flex-start }
+.rl-hud-right { align-items:flex-end }
+.rl-fuel-wrap {
+  width:70px;height:10px;
+  background:rgba(0,0,0,0.35);border-radius:5px;overflow:hidden;
+}
+.rl-fuel-fill {
+  height:100%;width:100%;background:#4CAF50;
+  border-radius:5px;transition:width 0.15s linear;
+}
+.rl-fuel-label {
+  font-family:'Fredoka One',cursive;font-size:0.55rem;
+  color:rgba(255,255,255,0.8);
+  text-shadow:1px 1px 0 rgba(0,0,0,0.3);margin-top:2px;
+}
+.rl-alt {
+  font-family:'Fredoka One',cursive;font-size:0.95rem;
+  color:#FFF;text-shadow:1px 1px 2px rgba(0,0,0,0.4);
+}
+.rl-wind {
+  font-size:0.75rem;
+  text-shadow:1px 1px 0 rgba(0,0,0,0.3);margin-top:2px;
+}
+
+/* ─── Result panel ────────────────────────── */
+.rl-result {
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  background:rgba(255,253,231,0.96);border-radius:22px;
+  padding:24px 24px 20px;text-align:center;
+  box-shadow:0 8px 30px rgba(0,0,0,0.3);
+  min-width:200px;
+  animation:rlPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes rlPopIn {
+  from{opacity:0;transform:translate(-50%,-50%) scale(0.7)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1)}
+}
+.rl-result-title {
+  font-family:'Fredoka One',cursive;font-size:1.5rem;
+  color:var(--navy);margin-bottom:12px;
+}
+.rl-star-row {
+  display:flex;align-items:center;justify-content:center;
+  gap:6px;margin:6px 0;
+}
+.rl-star-icon { font-size:1.2rem }
+.rl-star-label { font-weight:800;font-size:0.85rem;color:#5C6BC0 }
+.rl-result-btn {
+  margin-top:14px;padding:10px 28px;
+  font-family:'Fredoka One',cursive;font-size:1.05rem;
+  border:none;border-radius:99px;
+  background:#43A047;color:white;cursor:pointer;
+  box-shadow:0 4px 0 #2E7D32;transition:transform 0.1s;
+}
+.rl-result-btn:hover { transform:translateY(-2px) }
+.rl-result-btn:active { transform:translateY(2px) }
+
+/* ─── End screen ──────────────────────────── */
+.rl-end-screen {
+  text-align:center;padding:40px 20px;
+  animation:cardIn 0.4s ease;
+}
+.rl-end-title {
+  font-family:'Fredoka One',cursive;font-size:2rem;
+  color:white;text-shadow:2px 2px 0 rgba(0,0,0,0.2);
+  margin-bottom:16px;
+}
+.rl-end-stars {
+  font-family:'Fredoka One',cursive;font-size:1.5rem;
+  color:#FFD700;text-shadow:1px 1px 0 rgba(0,0,0,0.2);
+  margin-bottom:24px;
+}
+.rl-end-btn {
+  padding:14px 36px;
+  font-family:'Fredoka One',cursive;font-size:1.2rem;
+  border:none;border-radius:99px;
+  background:var(--coral);color:white;cursor:pointer;
+  box-shadow:0 5px 0 var(--coral2);transition:transform 0.1s;
+}
+.rl-end-btn:hover { transform:translateY(-2px) }
+.rl-end-btn:active { transform:translateY(2px) }

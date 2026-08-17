@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Rocket Lab — Wiz's Adventure Hub</title>
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/rocket-lab.css">
+</head>
+<body>
+
+<div id="scene" class="day">
+  <div class="sun"></div>
+  <div class="moon"></div>
+  <div class="stars-wrap" id="starsWrap"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="hills">
+    <div class="hill hill1"></div>
+    <div class="hill hill2"></div>
+    <div class="hill hill3"></div>
+  </div>
+</div>
+
+<div id="confetti"></div>
+
+<a class="back-hub" href="../index.html">🦉 Hub</a>
+
+<div id="app">
+  <div class="rl-header">
+    <div class="rl-title">🚀 Rocket Lab</div>
+    <div class="level-dots" id="dots"></div>
+    <div class="rl-lvl-label" id="lvLabel"></div>
+  </div>
+
+  <div id="wizHost"></div>
+
+  <div class="rl-game-screen" id="gameScreen">
+    <canvas id="rlCanvas" class="rl-canvas"></canvas>
+    <div class="rl-build" id="buildPanel"></div>
+    <div class="rl-hud" id="hud" style="display:none">
+      <div class="rl-hud-left">
+        <div class="rl-fuel-wrap">
+          <div class="rl-fuel-fill" id="fuelFill"></div>
+        </div>
+        <div class="rl-fuel-label">FUEL</div>
+      </div>
+      <div class="rl-hud-right">
+        <div class="rl-alt" id="altLabel">0m</div>
+        <div class="rl-wind" id="windLabel"></div>
+      </div>
+    </div>
+    <div class="rl-result" id="resultPanel" style="display:none">
+      <div class="rl-result-title" id="resultTitle"></div>
+      <div class="rl-result-stars" id="resultStars"></div>
+      <button class="rl-result-btn" id="resultBtn"></button>
+    </div>
+  </div>
+
+  <div class="rl-end-screen" id="endScreen" style="display:none">
+    <div class="rl-end-title">🚀 Mission Complete!</div>
+    <div class="rl-end-stars" id="endStars"></div>
+    <button class="rl-end-btn" id="endBtn">Play Again</button>
+  </div>
+</div>
+
+<script src="../js/core/util.js"></script>
+<script src="../js/core/scene.js"></script>
+<script src="../js/core/wiz.js"></script>
+<script src="../js/core/confetti.js"></script>
+<script src="../js/core/audio.js"></script>
+<script src="../js/rocket-lab/levels.js"></script>
+<script src="../js/rocket-lab/game.js"></script>
+<script>
+  KL.rocketLab.init();
+</script>
+</body>
+</html>
