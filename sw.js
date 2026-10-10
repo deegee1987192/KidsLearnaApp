@@ -2,7 +2,7 @@
 // Network-first for the site (so game updates show up right away), falling back
 // to the cache when offline. /api/ requests always go to the network, never cached.
 // Bump CACHE when the precache list changes.
-const CACHE = 'kidslearn-v2';
+const CACHE = 'kidslearn-v3';
 
 const PRECACHE = [
   './',

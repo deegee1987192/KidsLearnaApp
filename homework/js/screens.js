@@ -55,7 +55,7 @@
       lastPlayedDate: null,
       currentReward: draft.reward || null,
       rewardStatus: 'locked',
-      missionsPerDay: 2,
+      missionsPerDay: 5,
       bonusAllowed: true,
     };
   }
@@ -378,7 +378,7 @@
         }, 'gold bonus-btn') : null));
       KL.confetti.launchConfetti(30);
     }else{
-      const row = h('div', 'mission-row' + (rec.missions.length > 2 ? ' many' : ''));
+      const row = h('div', 'mission-row' + (rec.missions.length > 6 ? ' lots' : rec.missions.length > 2 ? ' many' : ''));
       const nth = { math: 0, reading: 0 };
       rec.missions.forEach((m, idx) => {
         const s = SUBJECT[m.subject];
@@ -723,7 +723,7 @@
           })),
 
         h('div', 'pc-section', h('b', null, 'Missions per day'),
-          seg([[2, '2'], [4, '4'], [6, '6']], hw.missions.perDay(child), async v => {
+          seg(hw.missions.PER_DAY.map(n => [n, String(n)]), hw.missions.perDay(child), async v => {
             child.missionsPerDay = v;
             await saveChild(child);
             // Fewer: swap today's set if untouched. More: today's set is topped up on the next visit.

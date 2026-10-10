@@ -156,7 +156,7 @@
         kids.result.forEach(c => {
           const r = tx.objectStore('dailyMissions').get(c.id + '_' + today);
           r.onsuccess = () => {
-            left += r.result ? r.result.missions.filter(m => m.status !== 'done').length : (c.missionsPerDay || 2);
+            left += r.result ? r.result.missions.filter(m => m.status !== 'done').length : (c.missionsPerDay || 5);
             if(--pending) return;
             const b = document.getElementById('hwBadge');
             b.textContent = left ? '⭐ ' + left + ' left today' : '✅ Done today';

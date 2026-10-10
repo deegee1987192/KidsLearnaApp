@@ -6,7 +6,7 @@
   const { today, addDays, uid } = hw.util;
 
   const API_URL = '/api/missions';
-  const TIMEOUT_MS = 25000;
+  const TIMEOUT_MS = 60000; // up to 20 AI missions, two server attempts
 
   // Same rules as api/missions.js — never trust what comes over the wire.
   function validVisual(v){
@@ -22,7 +22,7 @@
     return false;
   }
   // `count` missions alternating math, reading, math, …
-  function validate(arr, count = 2){
+  function validate(arr, count){
     if(!Array.isArray(arr) || arr.length !== count) return false;
     return arr.every((m, i) => {
       const subject = i % 2 ? 'reading' : 'math';
@@ -46,7 +46,8 @@
     }, extra));
   }
 
-  const perDay = child => [2, 4, 6].includes(child.missionsPerDay) ? child.missionsPerDay : 2;
+  const PER_DAY = [5, 10, 15, 20];
+  const perDay = child => PER_DAY.includes(child.missionsPerDay) ? child.missionsPerDay : 5;
   const MAX_BONUS = 4;
 
   async function historyFor(childId, sinceDate){
@@ -141,5 +142,5 @@
   async function save(rec){ await hw.db.put('dailyMissions', rec, key(rec.childId, rec.date)); }
   async function regenerate(childId){ await hw.db.delete('dailyMissions', key(childId, today())); }
 
-  hw.missions = { getToday, save, regenerate, validate, historyFor, key, perDay, addBonus, canBonus, MAX_BONUS };
+  hw.missions = { getToday, save, regenerate, validate, historyFor, key, perDay, PER_DAY, addBonus, canBonus, MAX_BONUS };
 })();

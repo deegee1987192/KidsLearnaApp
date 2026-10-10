@@ -1,5 +1,5 @@
 // Vercel serverless function: POST /api/missions
-// Body: { level: "age4" | "age6", date: "YYYY-MM-DD", recentShortTexts: [...], count: 2 | 4 | 6 }
+// Body: { level: "age4" | "age6", date: "YYYY-MM-DD", recentShortTexts: [...], count: 5 | 10 | 15 | 20 }
 // → { missions: [math, reading, math, …] }  or  { fallback: true }
 // Needs the ANTHROPIC_API_KEY env var in Vercel. No npm packages; uses Node 18+ fetch.
 
@@ -80,7 +80,7 @@ async function askClaude(apiKey, level, date, recent, count){
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 16000,
       output_config: { effort: 'low' },
       system: `You write short daily homework missions for a child using a tablet app called Homework Quest.\n\n${LEVELS[level]}\n\n${RULES}\n\n${SHAPE}`,
       messages: [{
@@ -89,7 +89,7 @@ async function askClaude(apiKey, level, date, recent, count){
           (recent.length ? `\nAvoid repeating these recent missions:\n- ${recent.join('\n- ')}` : ''),
       }],
     }),
-    signal: AbortSignal.timeout(11000),
+    signal: AbortSignal.timeout(28000),
   });
   if(!res.ok){
     console.error('Claude API error', res.status, (await res.text()).slice(0, 300));
@@ -116,7 +116,7 @@ module.exports = async function handler(req, res){
   const recent = (Array.isArray(body.recentShortTexts) ? body.recentShortTexts : [])
     .filter(s => typeof s === 'string').slice(0, 12).map(s => s.slice(0, 80));
 
-  const count = [2, 4, 6].includes(body.count) ? body.count : 2;
+  const count = [5, 10, 15, 20].includes(body.count) ? body.count : 5;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if(!apiKey) return res.status(200).json({ fallback: true });
