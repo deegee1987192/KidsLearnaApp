@@ -306,6 +306,7 @@
     const bubble = h('div', 'pet-bubble');
     const petStage = h('div', 'pet-stage', pet, bubble);
     root.appendChild(petStage);
+    root.appendChild(bigBtn('✏️ My buddy', () => go('buddy', { childId }), 'ghost buddy-btn'));
     const petSay = (text, opts) => { bubble.textContent = text; bubble.classList.add('show'); return hw.speak(text, Object.assign({ pitchMul: 1.3 }, opts)); };
 
     // Map
@@ -915,5 +916,69 @@
     },
   };
 
-  hw.screens = { home, setup, hub, mission, feed, chest, pin, parent };
+  // ═════════════════════════════════════════════════════════
+  // BUDDY — the child swaps pet and/or renames it, any time
+  // ═════════════════════════════════════════════════════════
+  async function buddy(root, { childId }){
+    const child = await getChild(childId);
+    if(!child) return go('home');
+    setTheme(child);
+    showWiz(true);
+    setGear(false);
+    let type = child.pet.type;
+
+    root.appendChild(backBtn('⬅ Back', () => go('hub', { childId })));
+    say(`Pick your buddy, ${child.name}!`);
+
+    const grid = h('div', 'pet-grid');
+    const preview = h('div', 'buddy-preview');
+    const chips = h('div', 'chip-row');
+    const name = h('input', { class: 'hw-input', type: 'text', maxlength: '14', placeholder: 'Buddy name', value: child.pet.name, autocomplete: 'off' });
+
+    function showPreview(){
+      preview.innerHTML = '';
+      preview.appendChild(hw.pets.render(type, 'bounce', 'lg'));
+    }
+    function showChips(){
+      chips.innerHTML = '';
+      hw.pets.info(type).names.forEach(n => chips.appendChild(h('button', {
+        class: 'name-chip', type: 'button',
+        onclick: () => { sfx('tap'); name.value = n; say(`${n}! I love it!`, 'happy'); },
+      }, n)));
+    }
+
+    Object.entries(hw.pets.PETS).forEach(([t, p]) => {
+      const el = hw.pets.render(t, 'bounce', 'md');
+      grid.appendChild(h('button', {
+        class: 'pet-card' + (t === type ? ' sel' : ''), type: 'button',
+        onclick: e => {
+          sfx('tap');
+          type = t;
+          [...grid.children].forEach(c => c.classList.remove('sel'));
+          e.currentTarget.classList.add('sel');
+          hw.pets.play(el, 'wave', 900);
+          showPreview();
+          showChips();
+          say(`A ${p.label.toLowerCase()}! What's your buddy's name?`, 'happy');
+        },
+      }, el, h('div', 'pet-label', p.label)));
+    });
+    showPreview();
+    showChips();
+
+    root.appendChild(h('div', 'screen setup-card',
+      h('h1', null, 'My buddy'),
+      grid,
+      preview,
+      h('div', 'setup-label', 'Buddy name'),
+      chips,
+      name,
+      bigBtn('Save ✓', async () => {
+        child.pet = { type, name: name.value.trim() || child.pet.name || hw.pets.info(type).names[0] };
+        await saveChild(child);
+        go('hub', { childId });
+      }, 'coral')));
+  }
+
+  hw.screens = { home, setup, hub, mission, feed, chest, pin, parent, buddy };
 })();
