@@ -398,3 +398,5 @@
 /* ═══ Change buddy ═══ */
 .buddy-btn{font-size:1.25rem;padding:8px 28px}
 .buddy-preview{min-height:110px;display:flex;align-items:center;justify-content:center}
+.pc-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pc-row-name{font-weight:900;font-size:1.05rem}

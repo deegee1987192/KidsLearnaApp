@@ -55,7 +55,7 @@
       lastPlayedDate: null,
       currentReward: draft.reward || null,
       rewardStatus: 'locked',
-      missionsPerDay: 5,
+      missionsPerDay: draft.missionsPerDay || 5,
       bonusAllowed: true,
     };
   }
@@ -140,7 +140,7 @@
     showWiz(true);
     setGear(false);
     const needPin = !settings().parentPinHash;
-    const draft = { name: '', avatarEmoji: AVATARS[0], level: 'age4', petType: null, petName: '', mapTheme: 'jungle', reward: '' };
+    const draft = { name: '', avatarEmoji: AVATARS[0], level: 'age4', petType: null, petName: '', mapTheme: 'jungle', reward: '', missionsPerDay: 5 };
     const steps = [...(needPin ? ['pin'] : []), 'child', 'pet', 'petName', 'map', 'reward'];
     let si = 0;
 
@@ -273,6 +273,13 @@
         body.appendChild(card(h('div', 'grownup-tag', '👤 Grown-up'), h('h1', null, 'Treasure chest reward'),
           h('p', null, `A real-life reward ${draft.name} earns after ${mapLength()} missions. You can change it later.`),
           input, ideas,
+          h('div', 'setup-label', 'Missions per day'),
+          (function perDayPicker(){
+            const box = h('div');
+            const paint = () => { box.innerHTML = ''; box.appendChild(seg(hw.missions.PER_DAY.map(n => [n, String(n)]), draft.missionsPerDay, v => { draft.missionsPerDay = v; paint(); })); };
+            paint();
+            return box;
+          })(),
           bigBtn('Start the quest! 🗺️', () => finish(true), 'coral'),
           h('button', { class: 'link-btn', type: 'button', onclick: () => finish(false) }, 'Skip for now')));
       },
@@ -723,16 +730,7 @@
             refresh();
           })),
 
-        h('div', 'pc-section', h('b', null, 'Missions per day'),
-          seg(hw.missions.PER_DAY.map(n => [n, String(n)]), hw.missions.perDay(child), async v => {
-            child.missionsPerDay = v;
-            await saveChild(child);
-            // Fewer: swap today's set if untouched. More: today's set is topped up on the next visit.
-            if(rec && v < rec.missions.length && rec.missions.every(m => m.status === 'todo')) await hw.missions.regenerate(child.id);
-            refresh();
-          }),
-          h('div', 'pc-note', 'Alternates math and reading. Each mission is one step on the map.'),
-          h('b', null, '“One more?” bonus missions'),
+        h('div', 'pc-section', h('b', null, '“One more?” bonus missions'),
           seg([[true, 'Allowed'], [false, 'Off']], child.bonusAllowed !== false, async v => {
             child.bonusAllowed = v;
             await saveChild(child);
@@ -829,6 +827,14 @@
           resetPinGate(pinBox);
           pinBox.scrollIntoView({ behavior: 'smooth' });
         }, 'small ghost')),
+      h('div', 'pc-section', h('b', null, 'Missions per day'),
+        kids.length ? kids.map(k => h('div', 'pc-row',
+          h('span', 'pc-row-name', `${k.avatarEmoji} ${k.name}`),
+          seg(hw.missions.PER_DAY.map(n => [n, String(n)]), hw.missions.perDay(k), async v => {
+            await setMissionsPerDay(k, v);
+            refresh();
+          }))) : h('div', 'pc-note', 'Add a child first.'),
+        h('div', 'pc-note', 'Alternates math and reading. Each mission is one step on the map. Changes apply right away; today’s list is topped up.')),
       h('div', 'pc-section', h('b', null, 'Map length (steps to the treasure)'),
         seg([[5, '5'], [10, '10'], [15, '15'], [20, '20']], mapLength(), async v => {
           settings().mapLength = v;
@@ -841,6 +847,14 @@
       h('p', 'pc-note', 'Mute affects sound effects only — Wiz always reads instructions aloud. Progress is stored on this tablet; export a backup now and then.')));
     const pinBox = h('div', 'screen pin-card hidden');
     root.appendChild(pinBox);
+  }
+
+  async function setMissionsPerDay(child, v){
+    child.missionsPerDay = v;
+    await saveChild(child);
+    // Fewer: swap today's set if nothing is started. More: today's set is topped up on the next visit.
+    const rec = await todaysRecord(child.id);
+    if(rec && v < rec.missions.length && rec.missions.every(m => m.status === 'todo')) await hw.missions.regenerate(child.id);
   }
 
   // Wiz's voice: pick from the tablet's English voices, set speed and pitch.
