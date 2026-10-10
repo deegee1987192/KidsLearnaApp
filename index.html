@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KidsLearn — Wiz's Adventure Hub 🦉</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1A237E">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="css/base.css">
 <style>
 .hub-title{
@@ -78,6 +81,12 @@
   <div id="wizHost"></div>
 
   <div class="tiles">
+    <a class="tile" href="homework/index.html">
+      <span class="tile-badge new" id="hwBadge">NEW</span>
+      <div class="tile-icon">🗺️</div>
+      <div class="tile-name">Homework Quest</div>
+      <div class="tile-desc">Today's missions · feed your pet</div>
+    </a>
     <a class="tile" href="games/word-quest/index.html">
       <span class="tile-badge">GAME 1</span>
       <div class="tile-icon">✏️</div>
@@ -126,6 +135,42 @@
   KL.scene.setScene('day');
   KL.wiz.mount(document.getElementById('wizHost'), 'Which game today, friend? 🦉');
   setTimeout(()=>KL.wiz.say('Which game today, friend? 🦉','idle'), 400);
+
+  // Homework Quest tile badge: "⭐ 2 left today". Read-only peek at its IndexedDB;
+  // aborts the open if the database doesn't exist yet so we never create it here.
+  (function(){
+    if(!window.indexedDB) return;
+    const req = indexedDB.open('homeworkQuest');
+    req.onupgradeneeded = () => req.transaction.abort();
+    req.onerror = () => {};
+    req.onsuccess = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains('children')){ db.close(); return; }
+      const d = new Date();
+      const today = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const tx = db.transaction(['children','dailyMissions'], 'readonly');
+      const kids = tx.objectStore('children').getAll();
+      kids.onsuccess = () => {
+        if(!kids.result.length) return;
+        let left = 0, pending = kids.result.length;
+        kids.result.forEach(c => {
+          const r = tx.objectStore('dailyMissions').get(c.id + '_' + today);
+          r.onsuccess = () => {
+            left += r.result ? r.result.missions.filter(m => m.status !== 'done').length : (c.missionsPerDay || 2);
+            if(--pending) return;
+            const b = document.getElementById('hwBadge');
+            b.textContent = left ? '⭐ ' + left + ' left today' : '✅ Done today';
+            b.className = 'tile-badge' + (left ? '' : ' new');
+          };
+        });
+      };
+      tx.oncomplete = () => db.close();
+    };
+  })();
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
 </script>
 </body>
 </html>
